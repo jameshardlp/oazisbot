@@ -6,7 +6,7 @@ import requests
 from typing import Optional
 from urllib.parse import urlencode
 
-from config import (FREEKASSA_SHOP_ID, FREEKASSA_SECRET1, FREEKASSA_SECRET2,
+from ..config import (FREEKASSA_SHOP_ID, FREEKASSA_SECRET1, FREEKASSA_SECRET2,
                       FREEKASSA_API_KEY, FREEKASSA_CURRENCY)
 
 logger = logging.getLogger(__name__)

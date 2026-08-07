@@ -7,11 +7,11 @@ import time
 from aiogram.types import (Message, CallbackQuery,
                            InlineKeyboardMarkup, InlineKeyboardButton)
 
-from config import OWNER_ID, CHANNEL_ID, SEND_DELAY, MODERATION_DELAY
-from storage import load_users, save_users
-from payments.orders import pending_broadcasts
-from client import bot, dp
-from media import send_media_message, mark_moderation_card
+from ...config import OWNER_ID, CHANNEL_ID, SEND_DELAY, MODERATION_DELAY
+from ...storage import load_users, save_users
+from ...payments.orders import pending_broadcasts
+from ..client import bot, dp
+from ..media import send_media_message, mark_moderation_card
 
 logger = logging.getLogger(__name__)
 

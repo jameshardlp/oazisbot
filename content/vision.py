@@ -9,7 +9,7 @@ import logging
 import requests
 from typing import Optional
 
-from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL, DEEPSEEK_VISION_MODEL, DEEPSEEK_API_URL
+from ..config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL, DEEPSEEK_VISION_MODEL, DEEPSEEK_API_URL
 
 logger = logging.getLogger(__name__)
 

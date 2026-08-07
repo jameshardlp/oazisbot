@@ -1,1 +1,7 @@
-worker: python -m bot.py
+from . import config
+from . import storage
+
+__all__ = [
+    "config",
+    "storage",
+]

@@ -5,17 +5,17 @@ import random
 import time
 from typing import Optional
 
-from config import CHANNEL_ID, OWNER_ID, DEEPSEEK_API_KEY, SEND_DELAY
-from storage import (load_users, save_users, load_history, save_history,
+from ..config import CHANNEL_ID, OWNER_ID, DEEPSEEK_API_KEY, SEND_DELAY
+from ..storage import (load_users, save_users, load_history, save_history,
                        history)
-from content.deepseek import generate_caption_with_validation
-from content.vision import analyze_photo_for_comment
-from content.media import get_streamer_media, get_random_photo
-from content.streamers import get_streamer_display_name
-from content.text import clean_text, truncate_by_sentences
-from client import bot
-from sender import send_post_with_retry
-from media import send_media_message
+from ..content.deepseek import generate_caption_with_validation
+from ..content.vision import analyze_photo_for_comment
+from ..content.media import get_streamer_media, get_random_photo
+from ..content.streamers import get_streamer_display_name
+from ..content.text import clean_text, truncate_by_sentences
+from .client import bot
+from .sender import send_post_with_retry
+from .media import send_media_message
 
 logger = logging.getLogger(__name__)
 
