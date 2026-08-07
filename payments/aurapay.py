@@ -3,7 +3,7 @@ import logging
 import requests
 from typing import Optional
 
-from ..config import (AURAPAY_MERCHANT_ID, AURAPAY_API_KEY,
+from config import (AURAPAY_MERCHANT_ID, AURAPAY_API_KEY,
                       AURAPAY_API_URL, AURAPAY_WEBHOOK_URL)
 
 logger = logging.getLogger(__name__)
