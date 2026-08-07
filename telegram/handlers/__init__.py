@@ -5,4 +5,4 @@
 """
 from . import basic, admin, broadcast, payment, moderation  # noqa: F401
 
-__all__ = ["basic", "admin", "broadcast", "payment", "moderation"]
+__init__ = ["basic", "admin", "broadcast", "payment", "moderation"]
