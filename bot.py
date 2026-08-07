@@ -18,10 +18,10 @@ logging.basicConfig(
 )
 
 from config import FREEKASSA_SHOP_ID, FREEKASSA_SECRET1, SEND_DELAY  # noqa: E402
-from .telegram.client import bot, dp  # noqa: E402
-from .telegram import handlers  # noqa: E402,F401  (регистрирует хендлеры)
-from .telegram.scheduler import scheduler  # noqa: E402
-from .payments.webhooks import freekassa_webhook, aurapay_webhook  # noqa: E402
+from telegram.client import bot, dp  # noqa: E402
+from telegram import handlers  # noqa: E402,F401  (регистрирует хендлеры)
+from telegram.scheduler import scheduler  # noqa: E402
+from payments.webhooks import freekassa_webhook, aurapay_webhook  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
