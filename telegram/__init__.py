@@ -6,7 +6,7 @@ from . import rate_limit
 from . import scheduler
 from . import sender
 
-__all__ = [
+__init__ = [
     "client",
     "media",
     "posting",
