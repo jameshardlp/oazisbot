@@ -17,7 +17,7 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 
-from .config import FREEKASSA_SHOP_ID, FREEKASSA_SECRET1, SEND_DELAY  # noqa: E402
+from config import FREEKASSA_SHOP_ID, FREEKASSA_SECRET1, SEND_DELAY  # noqa: E402
 from .telegram.client import bot, dp  # noqa: E402
 from .telegram import handlers  # noqa: E402,F401  (регистрирует хендлеры)
 from .telegram.scheduler import scheduler  # noqa: E402
