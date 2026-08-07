@@ -7,7 +7,7 @@ from . import streamers
 from . import text
 from . import vision
 
-__all__ = [
+__init__ = [
     "deepseek",
     "filters",
     "media",
