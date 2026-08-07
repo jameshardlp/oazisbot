@@ -1,7 +1,7 @@
 from . import config
 from . import storage
 
-__all__ = [
+__init__ = [
     "config",
     "storage",
 ]
