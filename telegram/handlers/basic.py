@@ -5,12 +5,12 @@ import logging
 from aiogram.filters import Command
 from aiogram.types import Message
 
-from ...config import OWNER_ID, CHANNEL_ID, UNLIMITED
-from ...storage import load_users, save_users, load_schedule, users, history
-from ...payments.orders import broadcast_prices
-from ..client import dp
-from ..posting import create_post_with_photo, send_to_all_users, get_channel_id
-from ..quota import can_use_photo, increment_photo_usage, format_limit
+from config import OWNER_ID, CHANNEL_ID, UNLIMITED
+from storage import load_users, save_users, load_schedule, users, history
+from payments.orders import broadcast_prices
+from client import dp
+from posting import create_post_with_photo, send_to_all_users, get_channel_id
+from quota import can_use_photo, increment_photo_usage, format_limit
 
 logger = logging.getLogger(__name__)
 
