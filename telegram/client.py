@@ -9,7 +9,6 @@ import sys
 from aiogram import Bot, Dispatcher
 
 from config import BOT_TOKEN
-from rate_limit import RateLimitMiddleware
 
 logger = logging.getLogger(__name__)
 
