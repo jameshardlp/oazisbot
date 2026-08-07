@@ -7,12 +7,12 @@ from aiogram.types import (CallbackQuery, PreCheckoutQuery, Message,
                            InlineKeyboardMarkup, InlineKeyboardButton,
                            LabeledPrice, WebAppInfo)
 
-from ...config import OWNER_ID, AURAPAY_MINIAPP_URL
-from ...payments.orders import broadcast_data, broadcast_prices, pending_broadcasts
-from ...payments.freekassa import create_freekassa_payment_link, check_freekassa_payment_status
-from ...payments.aurapay import check_aurapay_payment_status
-from ..client import bot, dp
-from .moderation import send_broadcast_for_moderation
+from config import OWNER_ID, AURAPAY_MINIAPP_URL
+from payments.orders import broadcast_data, broadcast_prices, pending_broadcasts
+from payments.freekassa import create_freekassa_payment_link, check_freekassa_payment_status
+from payments.aurapay import check_aurapay_payment_status
+from client import bot, dp
+from moderation import send_broadcast_for_moderation
 
 logger = logging.getLogger(__name__)
 
