@@ -9,7 +9,7 @@ import json
 import time
 import logging
 
-from ..config import BROADCAST_PRICE_FILE
+from config import BROADCAST_PRICE_FILE
 
 logger = logging.getLogger(__name__)
 
