@@ -18,4 +18,3 @@ if not BOT_TOKEN:
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
-dp.message.middleware(RateLimitMiddleware())
