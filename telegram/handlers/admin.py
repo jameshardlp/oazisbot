@@ -4,10 +4,10 @@ import logging
 from aiogram.filters import Command
 from aiogram.types import Message
 
-from ...config import OWNER_ID, STARS_CHANNEL_ID
-from ...storage import load_schedule, save_schedule, schedule_data
-from ...payments.orders import broadcast_prices, save_broadcast_price
-from ..client import bot, dp
+from config import OWNER_ID, STARS_CHANNEL_ID
+from storage import load_schedule, save_schedule, schedule_data
+from payments.orders import broadcast_prices, save_broadcast_price
+from client import bot, dp
 
 logger = logging.getLogger(__name__)
 
