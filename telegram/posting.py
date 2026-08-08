@@ -13,9 +13,9 @@ from content.vision import analyze_photo_for_comment
 from content.media import get_streamer_media, get_random_photo
 from content.streamers import get_streamer_display_name
 from content.text import clean_text, truncate_by_sentences
-from client import bot
-from sender import send_post_with_retry
-from media import send_media_message
+from telegram.client import bot
+from telegram.sender import send_post_with_retry
+from telegram.media import send_media_message
 
 logger = logging.getLogger(__name__)
 
