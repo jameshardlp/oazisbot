@@ -137,8 +137,9 @@ def check_date_in_content(content: str, url: str = "") -> bool:
     
     # По границам слов: подстрочный поиск отбраковывал 'img_20250.jpg' по '2025'
     # и 'golden' по 'old'.
-    if re.search(r'\b(19\d{2}|20[0-2]\d)\b', text_to_check):
-        year = int(re.search(r'\b(19\d{2}|20[0-2]\d)\b', text_to_check).group(1))
+    year_match = re.search(r'\b(19\d{2}|20[0-2]\d)\b', text_to_check)
+    if year_match:
+        year = int(year_match.group(1))
         if year < MIN_DATE.year:
             return False
 
