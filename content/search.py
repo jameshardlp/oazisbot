@@ -13,7 +13,7 @@ from .filters import MIN_DATE, check_date_in_content
 
 logger = logging.getLogger(__name__)
 
-def search_bing(query):
+def search_bing(query: str) -> Optional[str]:
     """Поиск изображений через Bing Картинки"""
     if not query:
         return None
@@ -52,7 +52,7 @@ def search_bing(query):
         logger.error(f"Ошибка Bing: {e}")
         return None
 
-def search_google_direct(query):
+def search_google_direct(query: str) -> Optional[str]:
     """Поиск изображений через Google Картинки"""
     if not query:
         return None
@@ -85,7 +85,7 @@ def search_google_direct(query):
         logger.error(f"Ошибка Google Картинки: {e}")
         return None
 
-def search_yandex(query):
+def search_yandex(query: str) -> Optional[str]:
     """Поиск изображений через Яндекс Картинки"""
     if not query:
         return None
@@ -126,7 +126,7 @@ def search_yandex(query):
         logger.error(f"Ошибка Яндекс Картинки: {e}")
         return None
 
-def search_pexels(query):
+def search_pexels(query: str) -> Optional[str]:
     """Поиск изображений через Pexels API"""
     if not query:
         return None
