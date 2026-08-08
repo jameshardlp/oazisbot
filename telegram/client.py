@@ -10,7 +10,6 @@ from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 
-# Абсолютный импорт вместо относительного
 from config import BOT_TOKEN
 from .rate_limit import RateLimitMiddleware
 
@@ -26,7 +25,7 @@ try:
     bot = Bot(
         token=BOT_TOKEN,
         default=DefaultBotProperties(
-            parse_mode=ParseMode.HTML,  # или ParseMode.MARKDOWN
+            parse_mode=ParseMode.HTML,
         )
     )
     logger.info("✅ Бот успешно инициализирован")
