@@ -1,4 +1,4 @@
-"""Регистрация всех хендлеров команд и callback'ов."""
+"""Регистрация всех хендлеров."""
 from . import admin
 from . import basic
 from . import broadcast
