@@ -37,7 +37,7 @@ async def send_media_message(chat_id, media_type, file_id, caption=None, reply_m
     sender, kwarg = senders[media_type]
 
     if media_type in CAPTIONLESS_MEDIA:
-        await sender(**{"chat_id": chat_id, kwarg: file_id})
+        await sender(chat_id=chat_id, **{kwarg: file_id})
         if caption:
             await bot.send_message(chat_id=chat_id, text=caption,
                                    reply_markup=reply_markup, parse_mode=parse_mode)
@@ -46,13 +46,16 @@ async def send_media_message(chat_id, media_type, file_id, caption=None, reply_m
                                    reply_markup=reply_markup)
         return
 
-    await sender(**{
+    kwargs = {
         "chat_id": chat_id,
         kwarg: file_id,
         "caption": caption or None,
         "reply_markup": reply_markup,
         "parse_mode": parse_mode,
-    })
+    }
+    # Удаляем None значения, чтобы не передавать лишние параметры
+    kwargs = {k: v for k, v in kwargs.items() if v is not None}
+    await sender(**kwargs)
 
 async def mark_moderation_card(message: Message, verdict: str):
     """Дописывает вердикт в карточку модерации и убирает кнопки.
