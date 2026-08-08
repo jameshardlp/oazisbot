@@ -1,4 +1,7 @@
-"""Точка входа бота: вебхук-сервер + long polling."""
+"""Точка входа бота: вебхук-сервер + long polling.
+
+Запуск:  python bot.py
+"""
 import asyncio
 import logging
 import os
@@ -11,7 +14,6 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 
-# ===== АБСОЛЮТНЫЕ ИМПОРТЫ =====
 from config import FREEKASSA_SHOP_ID, FREEKASSA_SECRET1, SEND_DELAY
 from telegram.client import bot, dp
 from telegram import handlers
@@ -22,6 +24,11 @@ logger = logging.getLogger(__name__)
 
 
 async def start_webhook_server(app: web.Application) -> None:
+    """Поднимает сервер для приёма вебхуков FreeKassa и AuraPay.
+
+    Порог запуска прежний: оба параметра FreeKassa обязательны. Без них
+    рублёвые и AuraPay-вебхуки недоступны (см. комментарий в freekassa.py).
+    """
     port = int(os.getenv("PORT", 8080))
     app.router.add_post("/freekassa/webhook", freekassa_webhook)
     app.router.add_post("/aurapay/webhook", aurapay_webhook)
