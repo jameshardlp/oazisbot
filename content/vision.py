@@ -26,7 +26,7 @@ def _ask_deepseek_about_image(image_url: str, question: str, log_label: str) -> 
     try:
         base64_image = encode_image_to_base64_url(image_url)
         if not base64_image:
-            return False
+            return True
 
         headers = {
             "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
@@ -78,7 +78,7 @@ def verify_asia_photo_with_deepseek(image_url: str) -> bool:
         "азиатского фото"
     )
 
-def encode_image_to_base64_url(image_url: str) -> str:
+def encode_image_to_base64_url(image_url: str) -> Optional[str]:
     try:
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
@@ -129,7 +129,7 @@ async def analyze_photo_for_comment(image_url: str) -> Optional[str]:
         }
         
         response = requests.post(
-            "https://api.deepseek.com/v1/chat/completions",
+            DEEPSEEK_API_URL,
             headers=headers,
             json=data,
             timeout=30
