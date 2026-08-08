@@ -31,7 +31,7 @@ async def get_channel_id() -> Optional[str]:
         return CHANNEL_ID.strip()
     return None
 
-async def resolve_post_media(streamer_key):
+async def resolve_post_media(streamer_key: Optional[str]):
     """Подбирает медиа для поста: клип/скрин стримера, фото стримера, фото Азии."""
     if streamer_key:
         media_url, media_type = await asyncio.to_thread(
@@ -62,7 +62,7 @@ async def create_post_with_photo(chat_id, user_id=0, skip_moderation=False, styl
 
         if not media_url:
             logger.error("❌ Не удалось найти медиа")
-            await send_post_with_retry(chat_id, None, caption)
+            await send_post_with_retry(chat_id, None, caption, "text")
             return True
         
         if media_type == 'photo' and random.random() < 0.1 and DEEPSEEK_API_KEY:
