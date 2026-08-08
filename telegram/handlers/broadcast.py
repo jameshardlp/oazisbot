@@ -8,8 +8,8 @@ from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from config import OWNER_ID
 from storage import load_users
 from payments.orders import broadcast_data, broadcast_prices
-from client import dp
-from media import send_media_message
+from telegram.client import dp
+from telegram.media import send_media_message
 
 logger = logging.getLogger(__name__)
 
