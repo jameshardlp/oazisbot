@@ -2,8 +2,8 @@
 from datetime import datetime
 from typing import Tuple
 
-from ..config import DAILY_PHOTO_LIMIT, UNLIMITED, OWNER_ID
-from ..storage import load_usage, save_usage
+from config import DAILY_PHOTO_LIMIT, UNLIMITED, OWNER_ID
+from storage import load_usage, save_usage
 
 def format_limit(value) -> str:
     """Показывает безлимит как ∞ вместо 'inf' в тексте для пользователя."""
