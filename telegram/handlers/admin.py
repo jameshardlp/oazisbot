@@ -32,7 +32,7 @@ async def schedule(msg: Message):
                 hour, minute = map(int, time_str.split(':'))
                 if 0 <= hour <= 23 and 0 <= minute <= 59:
                     new_times.append(f"{hour:02d}:{minute:02d}")
-            except:
+            except ValueError:
                 continue
         
         if new_times:
@@ -40,9 +40,10 @@ async def schedule(msg: Message):
             save_schedule(schedule_data)
             await msg.answer(f"✅ Расписание обновлено: {', '.join(new_times)}")
         else:
-            await msg.answer("❌ Неверный формат")
+            await msg.answer("❌ Неверный формат. Используйте: /schedule 12:00,21:00")
     except Exception as e:
         logger.error(f"Ошибка в команде schedule: {e}")
+        await msg.answer("❌ Произошла ошибка")
 
 @dp.message(Command("price"))
 async def set_price(message: Message):
@@ -88,6 +89,7 @@ async def set_price(message: Message):
             await message.answer("❌ Введите число")
     except Exception as e:
         logger.error(f"Ошибка в команде price: {e}")
+        await message.answer("❌ Произошла ошибка")
 
 @dp.message(Command("check_channel"))
 async def check_channel(message: Message):
