@@ -47,7 +47,7 @@ FREEKASSA_API_KEY = os.getenv("FREEKASSA_API_KEY", "")
 FREEKASSA_CURRENCY = os.getenv("FREEKASSA_CURRENCY", "RUB")
 
 # ===== AURAPAY =====
-AURAPAY_MERCHANT_ID = os.getenv("AURAPAY_MERCHANT_ID", "6a70ee5492726")
+AURAPAY_MERCHANT_ID = os.getenv("AURAPAY_MERCHANT_ID", "")
 AURAPAY_API_KEY = os.getenv("AURAPAY_API_KEY", "")
 AURAPAY_API_URL = os.getenv("AURAPAY_API_URL", "https://app.aurapay.tech")
 AURAPAY_WEBHOOK_URL = os.getenv("AURAPAY_WEBHOOK_URL", "")
@@ -57,11 +57,11 @@ AURAPAY_MINIAPP_URL = os.getenv(
 )
 
 # ===== ПОВЕДЕНИЕ (можно вынести в .env) =====
-SEND_DELAY = float(os.getenv("SEND_DELAY", 3.0))
-MIN_POST_INTERVAL = int(os.getenv("MIN_POST_INTERVAL", 2 * 60 * 60))
-RATE_LIMIT_SECONDS = int(os.getenv("RATE_LIMIT_SECONDS", 3))
-DAILY_PHOTO_LIMIT = int(os.getenv("DAILY_PHOTO_LIMIT", 10))
-MODERATION_DELAY = int(os.getenv("MODERATION_DELAY", 300))
+SEND_DELAY = float(os.getenv("SEND_DELAY", "3.0"))
+MIN_POST_INTERVAL = int(os.getenv("MIN_POST_INTERVAL", "7200"))
+RATE_LIMIT_SECONDS = int(os.getenv("RATE_LIMIT_SECONDS", "3"))
+DAILY_PHOTO_LIMIT = int(os.getenv("DAILY_PHOTO_LIMIT", "10"))
+MODERATION_DELAY = int(os.getenv("MODERATION_DELAY", "300"))
 
 # ===== ФАЙЛЫ =====
 USERS_FILE = os.getenv("USERS_FILE", "users.json")
