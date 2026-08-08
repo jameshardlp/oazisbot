@@ -194,6 +194,11 @@ async def check_rub_payment(callback: CallbackQuery):
 
         if paid or (payment_status and payment_status.get('status') == 'paid'):
             await process_successful_payment_broadcast(user_id, broadcast_info, "rub")
+            await callback.message.answer(
+                "✅ Оплата подтверждена!\n\n"
+                "Ваше сообщение отправлено на модерацию.\n"
+                "Ожидайте подтверждения от администратора."
+            )
         else:
             await callback.message.answer(
                 "❌ Платёж ещё не оплачен.\n"
