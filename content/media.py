@@ -99,7 +99,7 @@ def get_streamer_media(streamer_key: str, streamer_display: str) -> Tuple[Option
     logger.warning(f"⚠️ Не найдено ни клипа, ни фото для {streamer_display}")
     return None, 'none'
 
-async def get_random_photo(style: str = "streamer", streamer_key: str = None, history=None) -> Optional[str]:
+async def get_random_photo(style: str = "streamer", streamer_key: Optional[str] = None, history: Optional[list] = None) -> Optional[str]:
     """Получает случайное фото в зависимости от стиля"""
     if history is None:
         history = []
