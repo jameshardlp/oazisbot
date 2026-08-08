@@ -1,7 +1,8 @@
 """Сборка и кэширование промптов для DeepSeek."""
 import logging
+from typing import Optional
 
-from streamers import STREAMER_INFO, style_prompts
+from content.streamers import STREAMER_INFO, style_prompts
 
 logger = logging.getLogger(__name__)
 
