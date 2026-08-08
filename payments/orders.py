@@ -10,7 +10,7 @@ import time
 import logging
 from typing import Dict, Any, Optional
 
-from ..config import BROADCAST_PRICE_FILE
+from config import BROADCAST_PRICE_FILE
 
 logger = logging.getLogger(__name__)
 
