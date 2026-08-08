@@ -8,18 +8,19 @@
 import json
 import time
 import logging
+from typing import Dict, Any, Optional
 
 from ..config import BROADCAST_PRICE_FILE
 
 logger = logging.getLogger(__name__)
 
 # user_id -> данные незавершённой рассылки (текст, медиа, order_id, paid)
-broadcast_data = {}
+broadcast_data: Dict[int, Dict[str, Any]] = {}
 # broadcast_id -> рассылка, ожидающая модерации
-pending_broadcasts = {}
+pending_broadcasts: Dict[str, Dict[str, Any]] = {}
 
 
-def load_broadcast_price() -> dict:
+def load_broadcast_price() -> Dict[str, int]:
     """Читает цены из файла. При любой ошибке отдаёт значения по умолчанию."""
     try:
         with open(BROADCAST_PRICE_FILE, "r", encoding="utf-8") as f:
@@ -40,7 +41,7 @@ def save_broadcast_price(prices: dict) -> bool:
         return False
 
 
-broadcast_prices = load_broadcast_price()
+broadcast_prices: Dict[str, int] = load_broadcast_price()
 
 
 def mark_order_paid(base_order_id: str, method: str) -> bool:
