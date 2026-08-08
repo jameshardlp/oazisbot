@@ -34,9 +34,9 @@ def create_aurapay_payment(amount: float, order_id: str, user_id: int, method: s
                 "amount": str(amount),
                 "currency": "RUB",
                 "description": f"Оплата рассылки #{order_id}",
-                "callback_url": f"{AURAPAY_WEBHOOK_URL}/aurapay/webhook",
-                "success_url": f"{AURAPAY_WEBHOOK_URL}/aurapay-success",
-                "fail_url": f"{AURAPAY_WEBHOOK_URL}/aurapay-fail",
+                "callback_url": AURAPAY_WEBHOOK_URL + "/aurapay/webhook",
+                "success_url": AURAPAY_WEBHOOK_URL + "/aurapay-success",
+                "fail_url": AURAPAY_WEBHOOK_URL + "/aurapay-fail",
                 "payment_methods": [method] if method else ["card", "sbp", "crypto"],
                 "metadata": {
                     "user_id": str(user_id),
@@ -67,7 +67,7 @@ def create_aurapay_payment(amount: float, order_id: str, user_id: int, method: s
     return None
 
 async def check_aurapay_payment_status(order_id: str) -> Optional[dict]:
-    if not AURAPAY_API_KEY:
+    if not AURAPAY_API_KEY or not AURAPAY_MERCHANT_ID:
         return None
     try:
         url = f"{AURAPAY_API_URL}/invoice/status"
