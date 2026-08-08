@@ -10,10 +10,10 @@ import time
 import requests
 from typing import Optional, Tuple
 
-from ..config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL, DEEPSEEK_API_URL
-from .prompts import get_system_prompt, get_style_prompt
-from .streamers import STREAMER_INFO, get_streamer_for_post
-from .text import clean_text, validate_caption, truncate_by_sentences, add_to_last_posts
+from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL, DEEPSEEK_API_URL
+from prompts import get_system_prompt, get_style_prompt
+from streamers import STREAMER_INFO, get_streamer_for_post
+from text import clean_text, validate_caption, truncate_by_sentences, add_to_last_posts
 
 logger = logging.getLogger(__name__)
 
