@@ -3,7 +3,7 @@ import logging
 
 from aiogram.types import Message
 
-from client import bot
+from telegram.client import bot
 
 logger = logging.getLogger(__name__)
 
