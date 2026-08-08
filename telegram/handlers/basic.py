@@ -74,6 +74,8 @@ async def photo_command(message: Message):
             await message.answer("❌ Не удалось сгенерировать пост. Попробуйте ещё раз.")
             return
 
+        # Лимит списывается только за реально отправленный пост: раньше счётчик
+        # рос и при провале генерации, а пользователь всё равно видел «отправлено».
         new_count, limit = increment_photo_usage(user_id)
         remaining = limit - new_count
 
