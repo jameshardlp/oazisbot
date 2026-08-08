@@ -66,7 +66,7 @@ def validate_post_with_deepseek(post_text: str) -> Tuple[bool, str]:
 3. Пост должен быть грамотным
 4. Пост должен быть завершённым
 5. Пост должен быть 50-720 символов
-6. Пост должен иметь минимум 2 абзаца (разделённых пустой строкой)
+6. Пост должен иметь минимум 2 абзаца
 
 Если пост соответствует — напиши "APPROVED".
 Если пост НЕ соответствует — напиши "REJECT: причина"."""},
@@ -104,6 +104,64 @@ def validate_post_with_deepseek(post_text: str) -> Tuple[bool, str]:
     except Exception as e:
         logger.error(f"❌ Ошибка при проверке поста через DeepSeek: {e}")
         return True, post_text
+
+def count_paragraphs(text: str) -> int:
+    """
+    Подсчитывает количество абзацев в тексте.
+    Абзацем считается блок текста, отделённый от других:
+    - двойным переносом строки (\n\n)
+    - или одиночным переносом строки (\n) если есть несколько строк
+    - или если текст можно логически разделить на части
+    """
+    # Сначала пробуем разделить по двойному переносу
+    if '\n\n' in text:
+        paragraphs = [p.strip() for p in text.split('\n\n') if p.strip()]
+        if len(paragraphs) >= 2:
+            return len(paragraphs)
+    
+    # Пробуем разделить по одиночному переносу
+    if '\n' in text:
+        paragraphs = [p.strip() for p in text.split('\n') if p.strip()]
+        if len(paragraphs) >= 2:
+            return len(paragraphs)
+    
+    # Если нет переносов, пробуем разделить по предложениям
+    # Ищем конец предложения: точка, вопросительный, восклицательный знак с пробелом или концом строки
+    import re
+    sentences = re.split(r'[.!?]\s+', text)
+    sentences = [s.strip() for s in sentences if len(s.strip()) > 10]  # Минимум 10 символов на предложение
+    
+    # Если больше 3 предложений, считаем что это уже несколько абзацев
+    if len(sentences) >= 3:
+        # Группируем предложения в абзацы (по 2-3 предложения в абзац)
+        # Если предложений много, значит текст структурирован
+        return min(3, len(sentences) // 2 + 1)
+    
+    # Если текст короткий, но есть логическая структура - проверяем по длине
+    # Если текст можно разбить на 2 части по смыслу (по длине)
+    if len(text) > 100:
+        # Ищем маркеры смены темы: "Но", "Однако", "Кстати", "Короче" и т.д.
+        topic_markers = [' но ', ' однако ', ' кстати ', ' короче ', ' вообще ', ' слушай ', ' блин ']
+        for marker in topic_markers:
+            if marker in text.lower():
+                parts = text.lower().split(marker)
+                if len(parts) >= 2 and len(parts[0].strip()) > 20 and len(parts[1].strip()) > 20:
+                    return 2
+        
+        # Если текст длинный, но нет маркеров - считаем что это 1 абзац
+        if len(text) > 300:
+            # Пробуем разделить по логике: первая часть - вступление/история, вторая - вывод/комментарий
+            # Находим середину текста
+            mid = len(text) // 2
+            # Ищем ближайший конец предложения к середине
+            for i in range(mid, min(mid + 50, len(text))):
+                if text[i] in '.!?' and i < len(text) - 1 and text[i+1] == ' ':
+                    # Если после точки пробел и следующее предложение начинается с большой буквы
+                    if i + 2 < len(text) and text[i+2].isupper():
+                        return 2
+    
+    # По умолчанию считаем, что это 1 абзац
+    return 1
 
 def generate_caption_with_validation() -> Tuple[str, Optional[str]]:
     logger.info("Генерирую уникальный пост с проверкой...")
@@ -247,21 +305,14 @@ def generate_caption_with_validation() -> Tuple[str, Optional[str]]:
             if found_weak:
                 continue
             
-            # Проверяем наличие минимум 2 абзацев (разделённых двойным переносом строки)
-            # В реальных текстах абзацы разделяются пустой строкой (два \n подряд)
-            if '\n\n' not in caption:
-                logger.warning("Пост не содержит разделения на абзацы (нет пустых строк между блоками)")
+            # Проверяем количество абзацев с помощью универсальной функции
+            paragraph_count = count_paragraphs(caption)
+            
+            if paragraph_count < 2:
+                logger.warning(f"Пост содержит только {paragraph_count} абзац(ев), нужно минимум 2")
                 continue
             
-            # Разбиваем по двойному \n и проверяем, что есть как минимум 2 непустых абзаца
-            paragraphs = caption.split('\n\n')
-            paragraphs = [p.strip() for p in paragraphs if p.strip()]
-            
-            if len(paragraphs) < 2:
-                logger.warning(f"Пост содержит только {len(paragraphs)} абзац(ев), нужно минимум 2")
-                continue
-            
-            logger.info(f"Пост содержит {len(paragraphs)} абзацев")
+            logger.info(f"Пост содержит {paragraph_count} абзацев")
             
             # Проверяем длину поста (минимум 50 символов, целевая длина ~600, максимум 700, абсолютный максимум 720)
             if len(caption) < 50:
@@ -276,13 +327,9 @@ def generate_caption_with_validation() -> Tuple[str, Optional[str]]:
                 logger.info(f"Пост обрезан до {len(caption)} символов (максимум 720)")
                 
                 # После обрезания проверяем абзацы заново
-                if '\n\n' not in caption:
-                    logger.warning("После обрезания пост не содержит разделения на абзацы")
-                    continue
-                paragraphs = caption.split('\n\n')
-                paragraphs = [p.strip() for p in paragraphs if p.strip()]
-                if len(paragraphs) < 2:
-                    logger.warning(f"После обрезания пост содержит только {len(paragraphs)} абзац(ев), нужно минимум 2")
+                paragraph_count = count_paragraphs(caption)
+                if paragraph_count < 2:
+                    logger.warning(f"После обрезания пост содержит только {paragraph_count} абзац(ев), нужно минимум 2")
                     continue
             
             # Проверяем, что пост не слишком короткий для целевой длины
@@ -303,7 +350,7 @@ def generate_caption_with_validation() -> Tuple[str, Optional[str]]:
             approved, result = validate_post_with_deepseek(caption)
             
             if approved:
-                logger.info(f"✅ Пост одобрен! (попытка {attempt+1}) Длина: {len(caption)} символов, абзацев: {len(paragraphs)}")
+                logger.info(f"✅ Пост одобрен! (попытка {attempt+1}) Длина: {len(caption)} символов, абзацев: {paragraph_count}")
                 add_to_last_posts(caption)
                 return caption, streamer_key
             else:
