@@ -6,8 +6,8 @@
 import logging
 from aiohttp import web
 
-from orders import mark_order_paid
-from freekassa import verify_freekassa_webhook_signature
+from payments.orders import mark_order_paid
+from payments.freekassa import verify_freekassa_webhook_signature
 
 logger = logging.getLogger(__name__)
 
