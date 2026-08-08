@@ -77,7 +77,7 @@ def validate_post_with_deepseek(post_text: str) -> Tuple[bool, str]:
         }
         
         response = requests.post(
-            "https://api.deepseek.com/v1/chat/completions",
+            DEEPSEEK_API_URL,
             headers=headers,
             json=data,
             timeout=15
@@ -174,7 +174,7 @@ def generate_caption_with_validation() -> Tuple[str, Optional[str]]:
             
             system_prompt = get_system_prompt()
             
-            url = "https://api.deepseek.com/chat/completions"
+            url = DEEPSEEK_API_URL
             headers = {
                 "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
                 "Content-Type": "application/json"
