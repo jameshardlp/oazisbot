@@ -8,8 +8,8 @@ from datetime import datetime
 from typing import Optional
 from urllib.parse import quote
 
-from ..config import YOUTUBE_API_KEY
-from .filters import MIN_DATE, check_date_in_content
+from config import YOUTUBE_API_KEY
+from filters import MIN_DATE, check_date_in_content
 
 logger = logging.getLogger(__name__)
 
