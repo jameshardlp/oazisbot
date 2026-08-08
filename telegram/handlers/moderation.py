@@ -7,7 +7,7 @@ import time
 from aiogram.types import (Message, CallbackQuery,
                            InlineKeyboardMarkup, InlineKeyboardButton)
 
-from ...config import OWNER_ID, CHANNEL_ID, SEND_DELAY, MODERATION_DELAY
+from ...config import OWNER_ID, CHANNEL_ID, SEND_DELAY
 from ...storage import load_users, save_users
 from ...payments.orders import pending_broadcasts
 from ..client import bot, dp
