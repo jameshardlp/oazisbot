@@ -104,6 +104,7 @@ async def post_command(message: Message):
         await message.answer("✅ Пост создан в ЛС!")
     except Exception as e:
         logger.error(f"Ошибка в команде post: {e}")
+        await message.answer("❌ Произошла ошибка")
 
 @dp.message(Command("stop"))
 async def stop(msg: Message):
