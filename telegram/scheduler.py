@@ -7,7 +7,7 @@ from datetime import datetime
 
 from config import MIN_POST_INTERVAL, SEND_DELAY
 from storage import schedule_data
-from posting import create_post_with_photo, send_to_all_users
+from telegram.posting import create_post_with_photo, send_to_all_users
 
 logger = logging.getLogger(__name__)
 
