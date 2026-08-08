@@ -7,11 +7,11 @@ from collections import defaultdict
 
 from aiogram.exceptions import TelegramAPIError
 
-from ..config import SEND_DELAY
-from ..storage import load_users, save_users
-from ..content.deepseek import generate_caption_with_validation
-from ..content.text import clean_text, truncate_by_sentences
-from .client import bot
+from config import SEND_DELAY
+from storage import load_users, save_users
+from content.deepseek import generate_caption_with_validation
+from content.text import clean_text, truncate_by_sentences
+from client import bot
 
 logger = logging.getLogger(__name__)
 
