@@ -6,11 +6,11 @@ import random
 import logging
 from typing import Optional, Tuple
 
-from filters import check_date_in_content, is_photo_valid
-from streamers import STREAMER_QUERIES, ASIAN_QUERIES, STREAMER_KEYS
-from search import (search_bing, search_google_direct, search_yandex, search_pexels,
+from content.filters import check_date_in_content, is_photo_valid
+from content.streamers import STREAMER_QUERIES, ASIAN_QUERIES, STREAMER_KEYS
+from content.search import (search_bing, search_google_direct, search_yandex, search_pexels,
                      search_streamer_screenshot, search_youtube_clip)
-from vision import verify_photo_with_deepseek, verify_asia_photo_with_deepseek
+from content.vision import verify_photo_with_deepseek, verify_asia_photo_with_deepseek
 
 logger = logging.getLogger(__name__)
 
