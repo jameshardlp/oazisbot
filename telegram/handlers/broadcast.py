@@ -37,42 +37,48 @@ async def broadcast_command(message: Message):
             has_media = True
             media_type = "photo"
             media_file_id = message.photo[-1].file_id
-            text = message.caption or ""
+            if not text and message.caption:
+                text = message.caption.replace("/broadcast", "").strip()
         elif message.video:
             has_media = True
             media_type = "video"
             media_file_id = message.video.file_id
-            text = message.caption or ""
+            if not text and message.caption:
+                text = message.caption.replace("/broadcast", "").strip()
         elif message.document:
             has_media = True
             media_type = "document"
             media_file_id = message.document.file_id
-            text = message.caption or ""
+            if not text and message.caption:
+                text = message.caption.replace("/broadcast", "").strip()
         elif message.animation:
             has_media = True
             media_type = "animation"
             media_file_id = message.animation.file_id
-            text = message.caption or ""
+            if not text and message.caption:
+                text = message.caption.replace("/broadcast", "").strip()
         elif message.audio:
             has_media = True
             media_type = "audio"
             media_file_id = message.audio.file_id
-            text = message.caption or ""
+            if not text and message.caption:
+                text = message.caption.replace("/broadcast", "").strip()
         elif message.voice:
             has_media = True
             media_type = "voice"
             media_file_id = message.voice.file_id
-            text = message.caption or ""
+            if not text and message.caption:
+                text = message.caption.replace("/broadcast", "").strip()
         elif message.video_note:
             has_media = True
             media_type = "video_note"
             media_file_id = message.video_note.file_id
-            text = message.caption or ""
+            text = ""
         elif message.sticker:
             has_media = True
             media_type = "sticker"
             media_file_id = message.sticker.file_id
-            text = message.caption or ""
+            text = ""
         
         if not text and not has_media:
             stars_price = broadcast_prices.get("stars", 100)
@@ -99,7 +105,8 @@ async def broadcast_command(message: Message):
             'timestamp': time.time(),
             'chat_id': chat_id,
             'user_id': user_id,
-            'order_id': order_id
+            'order_id': order_id,
+            'paid': False
         }
         
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
