@@ -11,7 +11,7 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 
 from config import BOT_TOKEN
-from .rate_limit import RateLimitMiddleware
+from telegram.rate_limit import RateLimitMiddleware
 
 logger = logging.getLogger(__name__)
 
