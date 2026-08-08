@@ -47,7 +47,7 @@ async def freekassa_webhook(request):
 
         # FreeKassa не всегда шлёт STATUS: подтверждённая подпись сама по себе
         # означает успешную оплату.
-        if status in (None, '', 'SUCCESS'):
+        if status in (None, '', 'SUCCESS', 'success'):
             base_order_id = order_id.replace('_rub', '')
             mark_order_paid(base_order_id, 'rub')
 
