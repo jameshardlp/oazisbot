@@ -47,6 +47,8 @@ async def send_post_with_retry(chat_id, photo_url=None, caption=None, media_type
             if media_type == 'clip':
                 text = f"{caption}\n\n{photo_url}"
                 await bot.send_message(chat_id=chat_id, text=text)
+            elif media_type == 'text':
+                await bot.send_message(chat_id=chat_id, text=caption)
             else:
                 if len(caption) > 1024:
                     caption = truncate_by_sentences(caption, max_length=1023)
