@@ -31,11 +31,11 @@ def get_system_prompt() -> str:
         logger.info("💾 Системный промпт закэширован")
     return _system_prompt_cache[cache_key]
 
-def get_style_prompt(style: str, streamer_key: str = None) -> str:
+def get_style_prompt(style: str, streamer_key: Optional[str] = None) -> str:
     cache_key = f"style_prompt_{style}_{streamer_key}"
     
     if cache_key not in _system_prompt_cache:
-        base_prompt = style_prompts.get(style, style_prompts['streamer'])
+        base_prompt = style_prompts.get(style, style_prompts.get('streamer', ''))
         
         if streamer_key and streamer_key in STREAMER_INFO:
             info = STREAMER_INFO[streamer_key]
