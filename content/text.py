@@ -137,24 +137,24 @@ def clean_text(text: str) -> str:
     text = clean_punctuation(text)
     return text
 
-def validate_caption(text: str, min_length: int = 600, max_length: int = 900) -> Tuple[str, Optional[str]]:
+def validate_caption(text: str, min_length: int = 600, max_length: int = 900) -> Tuple[bool, Optional[str]]:
     """Проверяет текст с ограничениями по длине 600-900 символов"""
     if not text:
-        return '', 'Текст пустой'
+        return False, 'Текст пустой'
     text = clean_text(text)
     if len(text) < 10:
-        return '', 'Слишком короткий (меньше 10 символов)'
+        return False, 'Слишком короткий (меньше 10 символов)'
     if len(text) > max_length:
         text = truncate_by_sentences(text, max_length)
         if not text:
-            return '', 'Текст слишком длинный и не может быть обрезан'
+            return False, 'Текст слишком длинный и не может быть обрезан'
     if len(text) < min_length:
-        return '', f'Слишком короткий ({len(text)} символов, нужно {min_length})'
+        return False, f'Слишком короткий ({len(text)} символов, нужно {min_length})'
     if not text.endswith(('.', '!', '?')):
         text = ensure_ends_with_dot(text)
     all_sentences = get_sentences(text)
     if not all_sentences:
-        return '', 'Нет предложений'
+        return False, 'Нет предложений'
     last_sentence = all_sentences[-1].strip() if all_sentences else ''
     if last_sentence:
         if not last_sentence.endswith(('.', '!', '?')):
@@ -162,21 +162,21 @@ def validate_caption(text: str, min_length: int = 600, max_length: int = 900) ->
                 text = ' '.join(all_sentences[:-1]).strip()
                 text = ensure_ends_with_dot(text)
             else:
-                return '', 'Последнее предложение не завершено'
+                return False, 'Последнее предложение не завершено'
         word_count = len(last_sentence.split())
         if word_count < 3:
             if len(all_sentences) > 1:
                 text = ' '.join(all_sentences[:-1]).strip()
                 text = ensure_ends_with_dot(text)
             else:
-                return '', f'Последнее предложение слишком короткое ({word_count} слов)'
+                return False, f'Последнее предложение слишком короткое ({word_count} слов)'
         if not is_sentence_complete(last_sentence):
             if len(all_sentences) > 1:
                 text = ' '.join(all_sentences[:-1]).strip()
                 text = ensure_ends_with_dot(text)
             else:
-                return '', 'Последнее предложение не завершено логически'
-    return text, None
+                return False, 'Последнее предложение не завершено логически'
+    return True, None
 
 def add_to_last_posts(text: str):
     global last_posts
