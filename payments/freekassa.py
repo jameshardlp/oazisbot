@@ -32,7 +32,7 @@ def verify_freekassa_webhook_signature(data: dict) -> bool:
     # проверку. Сверьте формулу с актуальной документацией вашего аккаунта.
     sign_str = f"{shop_id}:{amount}:{FREEKASSA_SECRET2}:{order_id}"
     expected_sign = hashlib.md5(sign_str.encode()).hexdigest()
-    return hmac.compare_digest(sign.lower(), expected_sign)
+    return hmac.compare_digest(sign.lower(), expected_sign.lower())
 
 def create_freekassa_payment_link(amount: float, order_id: str, description: str = "") -> str:
     if not FREEKASSA_SHOP_ID or not FREEKASSA_SECRET1:
@@ -59,7 +59,7 @@ def create_freekassa_payment_link(amount: float, order_id: str, description: str
     return f"https://pay.fk.money/?{urlencode(params)}"
 
 async def check_freekassa_payment_status(order_id: str) -> Optional[dict]:
-    if not FREEKASSA_API_KEY:
+    if not FREEKASSA_API_KEY or not FREEKASSA_SHOP_ID:
         return None
     try:
         url = "https://api.freekassa.ru/v1/orders/status"
