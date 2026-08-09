@@ -29,6 +29,20 @@ CHANNEL_ID = os.getenv("CHANNEL_ID")  # может быть None (если ка�
 OWNER_ID = get_env_int("OWNER_ID", 0)
 STARS_CHANNEL_ID = get_env_int("STARS_CHANNEL_ID", -1003893727881)
 
+# ===== PYROGRAM (для чтения канала maddysontg) =====
+# API_ID и API_HASH берутся из my.telegram.org
+# Они НЕ обязательны — если не указаны, бот использует заглушку
+API_ID = os.getenv("API_ID")
+API_HASH = os.getenv("API_HASH")
+
+# Проверяем, что API_ID — это число
+if API_ID:
+    try:
+        API_ID = int(API_ID)
+    except ValueError:
+        print(f"⚠️ Ошибка: API_ID должен быть числом, получено: {API_ID}")
+        API_ID = None
+
 # ===== DEEPSEEK =====
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
 DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
@@ -79,3 +93,5 @@ if __name__ == "__main__":
     print(f"BOT_TOKEN: {'установлен' if BOT_TOKEN else '❌ ОТСУТСТВУЕТ'}")
     print(f"OWNER_ID: {OWNER_ID}")
     print(f"CHANNEL_ID: {CHANNEL_ID or 'не задан'}")
+    print(f"API_ID: {API_ID if API_ID else '⚠️ НЕ ЗАДАН (заглушка)'}")
+    print(f"API_HASH: {'установлен' if API_HASH else '⚠️ НЕ ЗАДАН (заглушка)'}")
