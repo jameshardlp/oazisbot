@@ -14,14 +14,14 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 
-from config import FREEKASSA_SHOP_ID, FREEKASSA_SECRET1, SEND_DELAY, API_ID, API_HASH
+from config import FREEKASSA_SHOP_ID, FREEKASSA_SECRET1, SEND_DELAY
 from telegram.client import bot, dp
 from telegram import handlers
 from telegram.scheduler import scheduler
 from payments.webhooks import freekassa_webhook, aurapay_webhook
 
-# Импортируем функцию инициализации Pyrogram
-from content.deepseek import init_pyrogram_client
+# Pyrogram больше не используется — удаляем импорт
+# from content.deepseek import init_pyrogram_client
 
 logger = logging.getLogger(__name__)
 
@@ -48,27 +48,10 @@ async def main() -> None:
     logger.info("🤖 БОТ ЗАПУЩЕН")
     logger.info("📸 85% постов про стримеров, 15% про Азию")
     logger.info(f"⏱️ Задержка между сообщениями: {SEND_DELAY} секунд")
+    logger.info("🔧 Используется веб-парсер для чтения стиля из канала (без Pyrogram)")
     logger.info("=" * 60)
 
-    # ============================================
-    # ИНИЦИАЛИЗАЦИЯ PYROGRAM (после логирования)
-    # ============================================
-    if API_ID and API_HASH:
-        logger.info("🔧 Инициализация Pyrogram клиента для чтения канала maddysontg...")
-        try:
-            pyro_client = init_pyrogram_client(
-                api_id=API_ID,
-                api_hash=API_HASH,
-                session_name="maddyson_reader"
-            )
-            if pyro_client:
-                logger.info("✅ Pyrogram клиент инициализирован успешно")
-            else:
-                logger.warning("⚠️ Pyrogram клиент не инициализирован (проверьте установку pyrogram)")
-        except Exception as e:
-            logger.error(f"❌ Ошибка инициализации Pyrogram: {e}")
-    else:
-        logger.warning("⚠️ API_ID или API_HASH не указаны в config.py. Чтение канала недоступно.")
+    # Pyrogram больше не инициализируем — используем веб-парсер
 
     if FREEKASSA_SHOP_ID and FREEKASSA_SECRET1:
         await start_webhook_server(web.Application())
