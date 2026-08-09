@@ -176,13 +176,19 @@ STREAMER_QUERIES = {
         "бустер на стриме", "buster стрим", "бустер стример",
         "бустер лицо", "buster stream", "бустер фото"
     ],
-    # ===== НОВЫЙ СТРИМЕР: НЕНОРМОВА =====
     'nenormova': [
         "ненормова на стриме", "nenormova стрим", "ненормова стример",
         "ненормова лицо", "nenormova stream", "ненормова фото",
         "галя ненормова", "ульяна ненормова"
     ],
 }
+
+# ===== СПИСКИ ДЛЯ ИМПОРТА =====
+# STREAMER_KEYS — для обратной совместимости с media.py
+STREAMER_KEYS = [
+    'voodoosh', 'praden', 'bratishkinoff', 'sasavot', 'alina_rin',
+    'lasqa', 'arrowwoods', 'evelone', 'buster', 'nenormova'
+]
 
 # ===== ОТОБРАЖАЕМЫЕ ИМЕНА =====
 STREAMER_DISPLAY_NAMES = {
@@ -195,13 +201,13 @@ STREAMER_DISPLAY_NAMES = {
     'arrowwoods': 'Аравудус',
     'evelone': 'Эвелон',
     'buster': 'Бустер',
-    'nenormova': 'Ненормова',  # НОВЫЙ СТРИМЕР
+    'nenormova': 'Ненормова',
 }
 
 # ===== ФУНКЦИИ =====
 def get_streamer_for_post() -> Tuple[str, str]:
     """Возвращает случайного стримера (ключ, отображаемое имя)."""
-    key = random.choice(list(STREAMER_DISPLAY_NAMES.keys()))
+    key = random.choice(STREAMER_KEYS)
     return key, STREAMER_DISPLAY_NAMES[key]
 
 def get_streamer_display_name(streamer_key: str) -> str:
