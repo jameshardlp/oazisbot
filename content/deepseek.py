@@ -9,197 +9,69 @@ import random
 import time
 import requests
 import re
-import asyncio
 from typing import Optional, Tuple, List
-from datetime import datetime, timedelta
 
 from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL, DEEPSEEK_API_URL
 from content.prompts import get_system_prompt, get_style_prompt
 from content.streamers import STREAMER_INFO, get_streamer_for_post
 from content.text import clean_text, validate_caption, truncate_by_sentences, add_to_last_posts
-
-# ID канала maddysontg для чтения стиля
-MADDYSON_CHANNEL_ID = -1001769375081
-
-# Настройки для Pyrogram
-try:
-    from pyrogram import Client
-    from pyrogram.errors import RPCError
-    PYROGRAM_AVAILABLE = True
-except ImportError:
-    PYROGRAM_AVAILABLE = False
-    logging.warning("⚠️ Pyrogram не установлен. Чтение канала недоступно.")
+from content.channel_parser import get_posts_from_channel_web, get_default_style_examples
 
 logger = logging.getLogger(__name__)
 
-# Глобальный кэш для постов из канала
-_cached_posts = []
+# Глобальный кэш для контекста стиля
+_style_context_cache = ""
 _cache_time = 0
 CACHE_TTL = 3600  # Обновлять раз в час
 
-# Pyrogram клиент (глобальный)
-_pyrogram_client = None
-
-def init_pyrogram_client(api_id: int, api_hash: str, session_name: str = "maddyson_reader"):
+def get_style_context(limit: int = 3, force_refresh: bool = False) -> str:
     """
-    Инициализирует Pyrogram клиент.
-    Вызывать один раз при старте бота.
-    """
-    global _pyrogram_client
+    Формирует контекст стиля из постов канала maddysontg.
+    Использует веб-парсер вместо Pyrogram.
     
-    if not PYROGRAM_AVAILABLE:
-        logger.error("❌ Pyrogram не установлен!")
-        return None
-    
-    if _pyrogram_client is None:
-        _pyrogram_client = Client(
-            session_name,
-            api_id=api_id,
-            api_hash=api_hash,
-            in_memory=True  # Не сохраняем сессию на диск
-        )
-        logger.info("✅ Pyrogram клиент инициализирован")
-    
-    return _pyrogram_client
-
-def get_posts_from_channel(limit: int = 5, force_refresh: bool = False) -> List[str]:
+    Args:
+        limit: Количество примеров постов
+        force_refresh: Принудительно обновить кэш
+        
+    Returns:
+        Строка с контекстом стиля
     """
-    Получает последние посты из канала maddysontg.
-    Использует кэш, чтобы не дёргать API каждый раз.
-    """
-    global _cached_posts, _cache_time
+    global _style_context_cache, _cache_time
     
     current_time = time.time()
     
-    # Если кэш ещё свежий и не требуется принудительное обновление — возвращаем его
-    if not force_refresh and _cached_posts and (current_time - _cache_time) < CACHE_TTL:
-        logger.info(f"📦 Использую кэш ({len(_cached_posts)} постов)")
-        return _cached_posts
-    
-    # Если Pyrogram не установлен — используем заглушку
-    if not PYROGRAM_AVAILABLE:
-        logger.warning("⚠️ Pyrogram не установлен, использую заглушку")
-        posts = get_default_style_examples()
-        _cached_posts = posts
-        _cache_time = current_time
-        return posts
-    
-    # Если клиент не инициализирован — используем заглушку
-    if _pyrogram_client is None:
-        logger.warning("⚠️ Pyrogram клиент не инициализирован, использую заглушку")
-        posts = get_default_style_examples()
-        _cached_posts = posts
-        _cache_time = current_time
-        return posts
+    # Если кэш ещё свежий и не требуется обновление — возвращаем его
+    if not force_refresh and _style_context_cache and (current_time - _cache_time) < CACHE_TTL:
+        logger.info("📦 Использую кэшированный контекст стиля")
+        return _style_context_cache
     
     try:
-        logger.info(f"📖 Читаю посты из канала maddysontg (CHANNEL_ID: {MADDYSON_CHANNEL_ID})...")
+        # Получаем посты из канала через веб-парсер
+        posts = get_posts_from_channel_web(limit=limit)
         
-        # Запускаем асинхронную функцию синхронно
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            posts = loop.run_until_complete(_async_fetch_posts(limit))
-        finally:
-            loop.close()
-        
-        if posts:
-            _cached_posts = posts
-            _cache_time = current_time
-            logger.info(f"✅ Загружено {len(posts)} постов из канала")
-        else:
-            logger.warning("⚠️ Не удалось загрузить посты из канала, использую заглушку")
+        if not posts:
+            logger.warning("⚠️ Не удалось получить посты из канала, использую заглушку")
             posts = get_default_style_examples()
-            _cached_posts = posts
-            _cache_time = current_time
         
-        return _cached_posts
+        # Формируем контекст с примерами
+        context = "Вот примеры постов в стиле, котором нужно писать:\n\n"
+        for i, post in enumerate(posts[:limit], 1):
+            context += f"Пример {i}:\n{post}\n\n"
         
-    except Exception as e:
-        logger.error(f"❌ Ошибка при получении постов из канала: {e}")
-        posts = get_default_style_examples()
-        _cached_posts = posts
+        context += "Пиши в ТОЧНО таком же стиле: мат, чёрный юмор, сарказм, самоирония, короткие предложения. Используй ту же лексику и манеру изложения."
+        
+        _style_context_cache = context
         _cache_time = current_time
-        return posts
-
-async def _async_fetch_posts(limit: int) -> List[str]:
-    """
-    Асинхронная функция для получения постов из канала через Pyrogram.
-    """
-    if _pyrogram_client is None:
-        return []
-    
-    posts = []
-    
-    try:
-        # Запускаем клиент
-        await _pyrogram_client.start()
+        logger.info(f"✅ Обновлён контекст стиля ({len(posts)} постов)")
+        return context
         
-        logger.info(f"📖 Читаю {limit} последних постов из канала...")
-        
-        # Получаем историю сообщений
-        # Сообщения приходят в обратном порядке (сначала новые)
-        async for message in _pyrogram_client.get_chat_history(
-            chat_id=MADDYSON_CHANNEL_ID,
-            limit=limit
-        ):
-            # Проверяем, что это текстовое сообщение и оно не пустое
-            if message.text and len(message.text.strip()) > 20:
-                # Очищаем от лишних символов
-                clean = message.text.strip()
-                posts.append(clean)
-                logger.debug(f"📝 Пост: {clean[:50]}...")
-        
-        # Если постов мало, пытаемся взять ещё (с запасом)
-        if len(posts) < 3:
-            logger.info(f"📖 Получено только {len(posts)} постов, пробую взять больше...")
-            # Берём больше постов чтобы было из чего выбрать
-            async for message in _pyrogram_client.get_chat_history(
-                chat_id=MADDYSON_CHANNEL_ID,
-                limit=limit * 3
-            ):
-                if message.text and len(message.text.strip()) > 20:
-                    clean = message.text.strip()
-                    if clean not in posts:  # Избегаем дубликатов
-                        posts.append(clean)
-                    if len(posts) >= limit * 2:  # Берём в 2 раза больше чем нужно
-                        break
-        
-        await _pyrogram_client.stop()
-        
-    except RPCError as e:
-        logger.error(f"❌ RPC ошибка при чтении канала: {e}")
     except Exception as e:
-        logger.error(f"❌ Ошибка при чтении канала: {e}")
-    
-    return posts[:limit]  # Возвращаем ровно столько, сколько запрошено
-
-def get_default_style_examples() -> List[str]:
-    """Возвращает примеры стиля на случай, если канал недоступен."""
-    return [
-        "Да ну нахуй, этот клоун опять на стриме орёт. Сидел бы лучше в МЧС, чем зрителей за деньги веселить.",
-        "Смотрю я на этого блогера и думаю — ну как так можно жить? Накрутил ботов и думает что он король.",
-        "Азия — это пиздец. Там такое творится, что я ахерел. Люди живут в каком-то параллельном мире.",
-        "Дианочка снова накрутила. Сколько можно? У меня уже крыша едет от этой ботоводки.",
-    ]
-
-def get_style_context(limit: int = 3) -> str:
-    """
-    Формирует контекст стиля из постов канала maddysontg.
-    """
-    posts = get_posts_from_channel(limit=limit)
-    
-    if not posts:
-        return "Используй мат, чёрный юмор, сарказм и самоиронию. Пиши коротко и ёмко."
-    
-    # Формируем контекст с примерами
-    context = "Вот примеры постов в стиле, котором нужно писать:\n\n"
-    for i, post in enumerate(posts[:limit], 1):
-        context += f"Пример {i}:\n{post}\n\n"
-    
-    context += "Пиши в ТОЧНО таком же стиле: мат, чёрный юмор, сарказм, самоирония, короткие предложения. Используй ту же лексику и манеру изложения."
-    
-    return context
+        logger.error(f"❌ Ошибка при получении контекста стиля: {e}")
+        # Возвращаем заглушку
+        fallback_context = "Используй мат, чёрный юмор, сарказм и самоиронию. Пиши коротко и ёмко."
+        _style_context_cache = fallback_context
+        _cache_time = current_time
+        return fallback_context
 
 def request_continuation(previous_text: str) -> str:
     if not DEEPSEEK_API_KEY:
@@ -362,11 +234,11 @@ def has_banned_phrases(text: str) -> Tuple[bool, str]:
 def generate_caption_with_validation() -> Tuple[str, Optional[str]]:
     """
     Генерирует пост с проверкой.
-    Для чтения стиля из канала используется Pyrogram.
+    Для чтения стиля из канала используется веб-парсер (без API ключей).
     """
     logger.info("Генерирую уникальный пост с проверкой...")
     
-    # Получаем стиль из канала maddysontg
+    # Получаем стиль из канала maddysontg через веб-парсер
     style_context = get_style_context(limit=3)
     
     rand = random.random()
