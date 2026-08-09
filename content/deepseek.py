@@ -24,6 +24,85 @@ _style_context_cache = ""
 _cache_time = 0
 CACHE_TTL = 3600  # Обновлять раз в час
 
+# ===== ПЕРСОНАЛЬНЫЕ ХАРАКТЕРИСТИКИ СТРИМЕРОВ =====
+STREAMER_PERSONALITIES = {
+    "bratishkin": {
+        "nicknames": ["Братишкин", "братишка"],
+        "traits": "тупой, полный идиот",
+        "style": "критический, уничижительный",
+        "examples": [
+            "Братишкин опять показывает свой IQ комнатной температуры.",
+            "Этот идиот даже не понимает, что делает.",
+            "Братишкин — живое доказательство теории Дарвина."
+        ]
+    },
+    "sasavot": {
+        "nicknames": ["Сасайрот", "Сасавот", "саса"],
+        "traits": "бездарный, крутит ботов",
+        "style": "насмешливый, обвинительный",
+        "examples": [
+            "Сасайрот опять накрутил ботов, а сам даже говорить не умеет.",
+            "Бездарность Сасайрота зашкаливает, одни боты его и спасают.",
+            "Сасайрот — король ботоводов, а не стример."
+        ]
+    },
+    "alina_rin": {
+        "nicknames": ["Алина Рин", "Алиночка", "Рин"],
+        "traits": "милая, няшная, но злая",
+        "style": "двойственный — сначала мило, потом жёстко",
+        "examples": [
+            "Алина Рин такая няшка, но если её разозлить — берегись!",
+            "Милая Алиночка, которая может уничтожить любого одним словом.",
+            "Рин — милаха с характером тигрицы."
+        ]
+    },
+    "praden": {
+        "nicknames": ["енот", "Праден", "прадик"],
+        "traits": "душный, унылый, как енот",
+        "style": "унылый, занудный",
+        "examples": [
+            "Праден опять душный, как старый енот в норе.",
+            "Енот Праден уныло вещает, хочется спать.",
+            "Праден — король уныния и душности."
+        ]
+    },
+    "booster": {
+        "nicknames": ["Бубстер", "Бустер", "буб"],
+        "traits": "лишний вес, карьера скоро закончится",
+        "style": "издевательский, предсказывающий крах",
+        "examples": [
+            "Бубстеру пора худеть, а не стримить.",
+            "Карьера Бубстера катится в жопу, если не уйдёт от Дианочки.",
+            "Бубстер — ходячий мем с лишним весом."
+        ]
+    },
+    "aravudus": {
+        "nicknames": ["дядя Добро", "Аравудус", "Ара"],
+        "traits": "неудачи в Мэхамене",
+        "style": "добродушно-насмешливый",
+        "examples": [
+            "Дядя Добро опять слил в Мэхамене.",
+            "Аравудус снова проиграл в Мэхамены.",
+            "Мэхамены снова уничтожили дядю Добро."
+        ]
+    },
+    "nenormova": {
+        "nicknames": ["дворняга", "Галя", "Ульяна", "Ненормова"],
+        "traits": "красивая, милая, лучшая стримерша на всём рутвиче",
+        "style": "восторженный, восхищённый",
+        "gender": "female",
+        "examples": [
+            "Наша дворняга Галя снова лучшая!",
+            "Ульяна Ненормова — королева рутвича, милаха и красотка.",
+            "Ненормова — лучшая стримерша, просто богиня."
+        ]
+    }
+}
+
+def get_streamer_personality(streamer_key: str) -> dict:
+    """Возвращает персонализацию для стримера."""
+    return STREAMER_PERSONALITIES.get(streamer_key, {})
+
 def get_style_context(limit: int = 3, force_refresh: bool = False) -> str:
     """
     Формирует контекст стиля из постов канала maddysontg.
@@ -72,6 +151,51 @@ def get_style_context(limit: int = 3, force_refresh: bool = False) -> str:
         _style_context_cache = fallback_context
         _cache_time = current_time
         return fallback_context
+
+def get_personality_prompt(streamer_key: str, streamer_name: str) -> str:
+    """
+    Возвращает персонализированный промпт для конкретного стримера.
+    """
+    personality = get_streamer_personality(streamer_key)
+    
+    if not personality:
+        # Если персонализации нет — стандартный подход
+        return f"Напиши комментарий к клипу со стримером {streamer_name}. Используй мат, сарказм, критику."
+    
+    nicknames = personality.get("nicknames", [streamer_name])
+    traits = personality.get("traits", "")
+    style_desc = personality.get("style", "")
+    examples = personality.get("examples", [])
+    gender = personality.get("gender", "male")
+    
+    # Выбираем случайный никнейм для разнообразия
+    main_nick = random.choice(nicknames)
+    
+    # Формируем промпт в зависимости от стримера
+    if streamer_key == "bratishkin":
+        return f"""Клип с Братишкиным. Напиши про него в стиле: "Братишкин — тупой, полный идиот". Используй уничижительные выражения, показывай его глупость. Примеры: "{random.choice(examples)}"."""
+    
+    elif streamer_key == "sasavot":
+        return f"""Клип с Сасавотом. Называй его САСАЙРОТ. Пиши про то, какой он бездарный, что крутит ботов, накручивает зрителей. Примеры: "{random.choice(examples)}"."""
+    
+    elif streamer_key == "alina_rin":
+        return f"""Клип с Алиной Рин. Пиши про неё: сначала какая она милая и няшная, потом — какая злая. Примеры: "{random.choice(examples)}"."""
+    
+    elif streamer_key == "praden":
+        return f"""Клип с Праденом. Называй его ЕНОТ. Пиши какой он душный и унылый. Примеры: "{random.choice(examples)}"."""
+    
+    elif streamer_key == "booster":
+        return f"""Клип с Бустером. Называй его БУБСТЕР. Упоминай его лишний вес, пиши что его карьера скоро закончится, если не уйдёт от Дианочки. Примеры: "{random.choice(examples)}"."""
+    
+    elif streamer_key == "aravudus":
+        return f"""Клип с Аравудусом. Иногда называй его "дядя Добро". Упоминай его неудачи в игре "Мэхамен" (Мэхаменов, Мэхамены, Мэхаменам). Примеры: "{random.choice(examples)}"."""
+    
+    elif streamer_key == "nenormova":
+        return f"""Клип с Ненормовой (Галя, Ульяна). Называй её ДВОРНЯГА. Пиши какая она красивая, милая, лучшая стримерша на всём рутвиче. ВОСТОРГАЙСЯ ей. Она женского пола, используй "она", "её". Примеры: "{random.choice(examples)}"."""
+    
+    else:
+        # Дефолтный промпт
+        return f"Напиши комментарий к клипу со стримером {streamer_name}. Используй мат, сарказм, критику. Называй его по имени."
 
 def request_continuation(previous_text: str) -> str:
     if not DEEPSEEK_API_KEY:
@@ -276,6 +400,11 @@ def generate_caption_with_validation() -> Tuple[str, Optional[str]]:
 Длина: 50-300 символов.
 """
             
+            # Получаем персонализированный промпт для стримера
+            personality_prompt = ""
+            if style == 'streamer' and streamer_key:
+                personality_prompt = get_personality_prompt(streamer_key, streamer_display)
+            
             streamer_topics = []
             if streamer_key and streamer_key in STREAMER_INFO:
                 info = STREAMER_INFO[streamer_key]
@@ -285,7 +414,8 @@ def generate_caption_with_validation() -> Tuple[str, Optional[str]]:
                 dative = info['dative']
                 accusative = info['accusative']
                 
-                streamer_topics = [
+                # Базовые темы (общие)
+                base_streamer_topics = [
                     f"Клип с {name}. Что там происходит? {pronoun} снова позорится? Или Дианочка накрутила {dative} ботов? Напиши короткий комментарий.",
                     f"Ты смотришь клип с {name}. В клипе видно как {pronoun} что-то делает. Опиши это и дай оценку. Критикуй, смейся, используй мат.",
                     f"Клип с участием {name}. Что {pronoun} сделал не так? Или наоборот — красавчик? Используй сарказм и мат.",
@@ -293,6 +423,18 @@ def generate_caption_with_validation() -> Tuple[str, Optional[str]]:
                     f"Клип с {name} и другими стримерами. Напиши что происходит и кто кого переиграл.",
                     f"Ты смотришь на {accusative} в клипе и ржёшь. Напиши почему.",
                 ]
+                
+                # Если есть персонализация — добавляем её в тему
+                if personality_prompt:
+                    # Добавляем персонализированную тему
+                    personalized_topics = [
+                        f"{personality_prompt} Используй мат, сарказм.",
+                        f"{personality_prompt} Будь максимально жёстким/восторженным.",
+                        f"{personality_prompt} Пиши коротко, 50-300 символов.",
+                    ]
+                    streamer_topics = personalized_topics + base_streamer_topics
+                else:
+                    streamer_topics = base_streamer_topics
             else:
                 streamer_topics = [
                     "Клип со стримером. Что там происходит? Напиши короткий комментарий с критикой и матом.",
@@ -309,9 +451,13 @@ def generate_caption_with_validation() -> Tuple[str, Optional[str]]:
             ]
             
             if attempt % 2 == 0:
-                current_prompt = base_prompt + random.choice(streamer_topics if style == 'streamer' else asian_topics)
+                if style == 'streamer' and personality_prompt:
+                    # Если есть персонализация — используем её в первую очередь
+                    current_prompt = base_prompt + random.choice(streamer_topics[:3])  # Берём из персонализированных
+                else:
+                    current_prompt = base_prompt + random.choice(streamer_topics if style == 'streamer' else asian_topics)
             else:
-                # Альтернативный вариант с более конкретным указанием
+                # Альтернативный вариант
                 if style == 'streamer':
                     topic_prompt = random.choice(streamer_topics)
                 else:
