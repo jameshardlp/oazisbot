@@ -16,6 +16,7 @@ from content.prompts import get_system_prompt, get_style_prompt
 from content.streamers import STREAMER_INFO, get_streamer_for_post
 from content.text import clean_text, validate_caption, truncate_by_sentences, add_to_last_posts
 from content.channel_parser import get_posts_from_channel_web, get_default_style_examples
+from content.media import get_streamer_media, get_random_photo
 
 logger = logging.getLogger(__name__)
 
