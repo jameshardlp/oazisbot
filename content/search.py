@@ -23,11 +23,16 @@ STREAMER_EXACT_NAMES = {
     'buster': ['buster', 'бустер'],
     'arrowwoods': ['arrowwoods', 'аравудус'],
     'voodoosh': ['voodoosh', 'вудуш'],
-    'lasqa': ['lasqa', 'ласка'],  # Только ТОЧНОЕ совпадение!
     'evelone': ['evelone', 'эвелон'],
     'nenormova': ['nenormova', 'ненормова'],
+    't2x2': ['t2x2', 'тоха'],
+    'dinablin': ['dinablin', 'дина блин'],
+    'olyashaa': ['olyashaa', 'оляша'],
+    'guit88man': ['guit88man', 'гитман'],
+    'recrent': ['recrent', 'рекрент'],
+    'koryamc': ['koryamc', 'коря мс'],
+    'karmikkoala': ['karmikkoala', 'кармик'],
 }
-
 
 # ===== ПОИСК КЛИПОВ НА YOUTUBE =====
 
