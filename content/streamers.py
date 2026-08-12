@@ -48,15 +48,6 @@ STREAMER_INFO = {
         'verb_present': 'делает', 'verb_future': 'сделает',
         'display_name': 'Алина Рин'
     },
-    'lasqa': {
-        'name': 'Ласка', 'gender': 'male', 'nominative': 'Ласка',
-        'genitive': 'Ласки', 'dative': 'Ласке', 'accusative': 'Ласку',
-        'instrumental': 'Лаской', 'prepositional': 'Ласке',
-        'pronoun': 'он', 'possessive': 'его',
-        'verb_past_male': 'сделал', 'verb_past_female': 'сделала',
-        'verb_present': 'делает', 'verb_future': 'сделает',
-        'display_name': 'Ласка'
-    },
     'arrowwoods': {
         'name': 'Аравудус', 'gender': 'male', 'nominative': 'Аравудус',
         'genitive': 'Аравудуса', 'dative': 'Аравудусу', 'accusative': 'Аравудуса',
@@ -84,7 +75,6 @@ STREAMER_INFO = {
         'verb_present': 'делает', 'verb_future': 'сделает',
         'display_name': 'Бустер'
     },
-    # ===== НОВЫЙ СТРИМЕР: НЕНОРМОВА =====
     'nenormova': {
         'name': 'Ненормова', 'gender': 'female', 'nominative': 'Ненормова',
         'genitive': 'Ненормовой', 'dative': 'Ненормовой', 'accusative': 'Ненормову',
@@ -93,6 +83,69 @@ STREAMER_INFO = {
         'verb_past_male': 'сделала', 'verb_past_female': 'сделала',
         'verb_present': 'делает', 'verb_future': 'сделает',
         'display_name': 'Ненормова'
+    },
+    't2x2': {
+        'name': 'T2x2', 'gender': 'male', 'nominative': 'T2x2',
+        'genitive': 'T2x2', 'dative': 'T2x2', 'accusative': 'T2x2',
+        'instrumental': 'T2x2', 'prepositional': 'T2x2',
+        'pronoun': 'он', 'possessive': 'его',
+        'verb_past_male': 'сделал', 'verb_past_female': 'сделала',
+        'verb_present': 'делает', 'verb_future': 'сделает',
+        'display_name': 'T2x2'
+    },
+    'dinablin': {
+        'name': 'Дина Блин', 'gender': 'female', 'nominative': 'Дина Блин',
+        'genitive': 'Дины Блин', 'dative': 'Дине Блин', 'accusative': 'Дину Блин',
+        'instrumental': 'Диной Блин', 'prepositional': 'Дине Блин',
+        'pronoun': 'она', 'possessive': 'её',
+        'verb_past_male': 'сделала', 'verb_past_female': 'сделала',
+        'verb_present': 'делает', 'verb_future': 'сделает',
+        'display_name': 'Дина Блин'
+    },
+    'olyashaa': {
+        'name': 'Оляша', 'gender': 'female', 'nominative': 'Оляша',
+        'genitive': 'Оляши', 'dative': 'Оляше', 'accusative': 'Оляшу',
+        'instrumental': 'Оляшей', 'prepositional': 'Оляше',
+        'pronoun': 'она', 'possessive': 'её',
+        'verb_past_male': 'сделала', 'verb_past_female': 'сделала',
+        'verb_present': 'делает', 'verb_future': 'сделает',
+        'display_name': 'Оляша'
+    },
+    'guit88man': {
+        'name': 'Гитман', 'gender': 'male', 'nominative': 'Гитман',
+        'genitive': 'Гитмана', 'dative': 'Гитману', 'accusative': 'Гитмана',
+        'instrumental': 'Гитманом', 'prepositional': 'Гитмане',
+        'pronoun': 'он', 'possessive': 'его',
+        'verb_past_male': 'сделал', 'verb_past_female': 'сделала',
+        'verb_present': 'делает', 'verb_future': 'сделает',
+        'display_name': 'Гитман'
+    },
+    'recrent': {
+        'name': 'Рекрент', 'gender': 'male', 'nominative': 'Рекрент',
+        'genitive': 'Рекрента', 'dative': 'Рекренту', 'accusative': 'Рекрента',
+        'instrumental': 'Рекрентом', 'prepositional': 'Рекренте',
+        'pronoun': 'он', 'possessive': 'его',
+        'verb_past_male': 'сделал', 'verb_past_female': 'сделала',
+        'verb_present': 'делает', 'verb_future': 'сделает',
+        'display_name': 'Рекрент'
+    },
+    'koryamc': {
+        'name': 'Коря МС', 'gender': 'female', 'nominative': 'Коря МС',
+        'genitive': 'Кори МС', 'dative': 'Коре МС', 'accusative': 'Корю МС',
+        'instrumental': 'Корей МС', 'prepositional': 'Коре МС',
+        'pronoun': 'она', 'possessive': 'её',
+        'verb_past_male': 'сделала', 'verb_past_female': 'сделала',
+        'verb_present': 'делает', 'verb_future': 'сделает',
+        'display_name': 'Коря МС'
+    },
+    'karmikkoala': {
+        'name': 'Кармик', 'gender': 'male', 'nominative': 'Кармик',
+        'genitive': 'Кармика', 'dative': 'Кармику', 'accusative': 'Кармика',
+        'instrumental': 'Кармиком', 'prepositional': 'Кармике',
+        'pronoun': 'он', 'possessive': 'его',
+        'verb_past_male': 'сделал', 'verb_past_female': 'сделала',
+        'verb_present': 'делает', 'verb_future': 'сделает',
+        'display_name': 'Кармик'
     },
 }
 
@@ -109,11 +162,17 @@ style_prompts = {
 - Братишкин: у Братишкина, Братишкину, Братишкиным, о Братишкине
 - Сасавот: у Сасавота, Сасавоту, Сасавотом, о Сасавоте
 - Алина Рин: у Алины Рин, Алине Рин, Алиной Рин, об Алине Рин (ОНА!)
-- Ласка: у Ласки, Ласке, Лаской, о Ласке
 - Аравудус: у Аравудуса, Аравудусу, Аравудусом, о Аравудусе
 - Эвелон: у Эвелона, Эвелону, Эвелоном, о Эвелоне
 - Бустер: у Бустера, Бустеру, Бустером, о Бустере
 - Ненормова: у Ненормовой, Ненормовой, Ненормову, о Ненормовой (ОНА! дворняга)
+- T2x2: у T2x2, T2x2, T2x2, о T2x2 (Тоха)
+- Дина Блин: у Дины Блин, Дине Блин, Дину Блин, о Дине Блин (ОНА!)
+- Оляша: у Оляши, Оляше, Оляшу, об Оляше (ОНА! пожилая)
+- Гитман: у Гитмана, Гитману, Гитманом, о Гитмане
+- Рекрент: у Рекрента, Рекренту, Рекрентом, о Рекренте
+- Коря МС: у Кори МС, Коре МС, Корю МС, о Коре МС (ОНА!)
+- Кармик: у Кармика, Кармику, Кармиком, о Кармике
 
 Требования:
 - Пост должен быть 600-900 символов
@@ -160,10 +219,6 @@ STREAMER_QUERIES = {
         "алина рин на стриме", "alina rin стрим", "алина рин стример",
         "алина рин лицо", "alina rin stream", "алина рин фото"
     ],
-    'lasqa': [
-        "ласка на стриме", "lasqa стрим", "ласка стример",
-        "ласка лицо", "lasqa stream", "ласка фото"
-    ],
     'arrowwoods': [
         "аравудус на стриме", "arrowwoods стрим", "аравудус стример",
         "аравудус лицо", "arrowwoods stream", "аравудус фото"
@@ -181,13 +236,41 @@ STREAMER_QUERIES = {
         "ненормова лицо", "nenormova stream", "ненормова фото",
         "галя ненормова", "ульяна ненормова"
     ],
+    't2x2': [
+        "t2x2 стрим", "тоха стрим", "t2x2 стример",
+        "t2x2 фото", "тоха фото"
+    ],
+    'dinablin': [
+        "дина блин стрим", "dinablin стрим", "дина блин стример",
+        "дина блин фото", "dinablin фото"
+    ],
+    'olyashaa': [
+        "оляша стрим", "olyashaa стрим", "оляша стример",
+        "оляша фото", "olyashaa фото"
+    ],
+    'guit88man': [
+        "гитман стрим", "guit88man стрим", "гитман стример",
+        "гитман фото", "guit88man фото"
+    ],
+    'recrent': [
+        "рекрент стрим", "recrent стрим", "рекрент стример",
+        "рекрент фото", "recrent фото"
+    ],
+    'koryamc': [
+        "коря мс стрим", "koryamc стрим", "коря мс стример",
+        "коря мс фото", "koryamc фото"
+    ],
+    'karmikkoala': [
+        "кармик стрим", "karmikkoala стрим", "кармик стример",
+        "кармик фото", "karmikkoala фото"
+    ],
 }
 
 # ===== СПИСКИ ДЛЯ ИМПОРТА =====
-# STREAMER_KEYS — для обратной совместимости с media.py
 STREAMER_KEYS = [
     'voodoosh', 'praden', 'bratishkinoff', 'sasavot', 'alina_rin',
-    'lasqa', 'arrowwoods', 'evelone', 'buster', 'nenormova'
+    'arrowwoods', 'evelone', 'buster', 'nenormova',
+    't2x2', 'dinablin', 'olyashaa', 'guit88man', 'recrent', 'koryamc', 'karmikkoala'
 ]
 
 # ===== ОТОБРАЖАЕМЫЕ ИМЕНА =====
@@ -197,11 +280,17 @@ STREAMER_DISPLAY_NAMES = {
     'bratishkinoff': 'Братишкин',
     'sasavot': 'Сасавот',
     'alina_rin': 'Алина Рин',
-    'lasqa': 'Ласка',
     'arrowwoods': 'Аравудус',
     'evelone': 'Эвелон',
     'buster': 'Бустер',
     'nenormova': 'Ненормова',
+    't2x2': 'T2x2',
+    'dinablin': 'Дина Блин',
+    'olyashaa': 'Оляша',
+    'guit88man': 'Гитман',
+    'recrent': 'Рекрент',
+    'koryamc': 'Коря МС',
+    'karmikkoala': 'Кармик',
 }
 
 # ===== ФУНКЦИИ =====
