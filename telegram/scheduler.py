@@ -1,78 +1,79 @@
-"""Планировщик публикаций по расписанию."""
+"""Планировщик для автоматической публикации постов."""
 import asyncio
 import logging
-import random
-import time
 from datetime import datetime
 
-from config import MIN_POST_INTERVAL, SEND_DELAY
-from storage import schedule_data
-from telegram.posting import create_post_with_photo, send_to_all_users
+from config import CHANNEL_ID, MIN_POST_INTERVAL
+from content.deepseek import generate_caption_with_validation
+from content.media import get_streamer_media
+from telegram.client import bot
 
 logger = logging.getLogger(__name__)
 
-# Защита от параллельных публикаций. Читаются и пишутся только в scheduler().
-is_sending = False
-last_post_time = time.time()
+async def publish_post():
+    """Публикует один пост в канал."""
+    try:
+        logger.info("📢 Начинаю публикацию автоматического поста...")
+        
+        # Генерируем пост
+        caption, streamer_key = generate_caption_with_validation()
+        
+        if not caption:
+            logger.warning("⚠️ Пост не сгенерирован, пропускаю публикацию")
+            return
+        
+        logger.info(f"✅ Пост сгенерирован (длина: {len(caption)} символов)")
+        logger.info(f"📝 Текст: {caption[:100]}...")
+        
+        # Ищем медиа для стримера
+        media_url = None
+        media_type = None
+        
+        if streamer_key:
+            logger.info(f"🔍 Ищу медиа для стримера: {streamer_key}")
+            media_url, media_type = get_streamer_media(streamer_key, streamer_key)
+            if media_url:
+                logger.info(f"✅ Найдено медиа: {media_type}")
+            else:
+                logger.info("ℹ️ Медиа не найдено, отправляю только текст")
+        
+        # Публикуем в канал
+        if CHANNEL_ID:
+            if media_url and media_type == 'clip':
+                await bot.send_video(
+                    chat_id=CHANNEL_ID,
+                    video=media_url,
+                    caption=caption
+                )
+                logger.info(f"✅ Пост с видео опубликован в канал!")
+            elif media_url and media_type == 'photo':
+                await bot.send_photo(
+                    chat_id=CHANNEL_ID,
+                    photo=media_url,
+                    caption=caption
+                )
+                logger.info(f"✅ Пост с фото опубликован в канал!")
+            else:
+                await bot.send_message(
+                    chat_id=CHANNEL_ID,
+                    text=caption
+                )
+                logger.info(f"✅ Текстовый пост опубликован в канал!")
+        else:
+            logger.warning("⚠️ CHANNEL_ID не задан, пост не отправлен")
+            
+    except Exception as e:
+        logger.error(f"❌ Ошибка публикации поста: {e}")
 
 async def scheduler():
-    global is_sending, last_post_time
-    await asyncio.sleep(10)
-    logger.info("🔄 Планировщик запущен")
-    logger.info(f"📅 Расписание: {schedule_data.get('times', ['12:00', '21:00'])}")
-    logger.info(f"⏱️ Минимальный интервал: {MIN_POST_INTERVAL//3600} часов")
-    logger.info(f"⏱️ Задержка между сообщениями: {SEND_DELAY} секунд")
+    """Основной цикл планировщика."""
+    logger.info(f"⏰ Планировщик запущен. Интервал: {MIN_POST_INTERVAL} секунд")
+    logger.info(f"📡 Канал для публикации: {CHANNEL_ID}")
     
-    # Уже отработанные слоты вида "2026-08-07 12:00". Сравнение по точной минуте
-    # проскакивало слот при дрейфе цикла: sleep(60) плюс время итерации могли
-    # перепрыгнуть с 11:59 сразу на 12:01.
-    fired_slots = set()
-
+    # Публикуем первый пост через 10 секунд после запуска
+    await asyncio.sleep(10)
+    await publish_post()
+    
     while True:
-        try:
-            now = datetime.now()
-            schedule_times = schedule_data.get("times", ["12:00", "21:00"])
-
-            due = None
-            for slot in schedule_times:
-                try:
-                    hh, mm = (int(p) for p in slot.split(":"))
-                except ValueError:
-                    logger.warning(f"⚠️ Некорректный слот расписания: {slot}")
-                    continue
-                slot_dt = now.replace(hour=hh, minute=mm, second=0, microsecond=0)
-                key = f"{now:%Y-%m-%d} {slot}"
-                if key not in fired_slots and now >= slot_dt and (now - slot_dt).total_seconds() < 3600:
-                    due = (slot, key)
-                    break
-
-            if due and not is_sending and time.time() - last_post_time >= MIN_POST_INTERVAL:
-                slot, key = due
-                fired_slots.add(key)
-                is_sending = True
-                try:
-                    random_delay = random.randint(0, 2700)
-                    logger.info(f"🎲 Случайная задержка {random_delay//60} минут")
-                    await asyncio.sleep(random_delay)
-
-                    if random.random() < 0.05:
-                        logger.info("🎲 Случайный пропуск отправки (5%)")
-                    else:
-                        logger.info(f"📢 Отправка по расписанию {slot}")
-                        await send_to_all_users()
-                        logger.info(f"✅ Пост отправлен в {datetime.now():%H:%M}")
-                    last_post_time = time.time()
-                except Exception as e:
-                    logger.error(f"❌ Ошибка отправки: {e}")
-                finally:
-                    is_sending = False
-
-            # Слоты старше суток не нужны
-            today = f"{datetime.now():%Y-%m-%d}"
-            fired_slots = {k for k in fired_slots if k.startswith(today)}
-
-            await asyncio.sleep(60)
-
-        except Exception as e:
-            logger.error(f"❌ Ошибка в планировщике: {e}")
-            await asyncio.sleep(60)
+        await asyncio.sleep(MIN_POST_INTERVAL)
+        await publish_post()
