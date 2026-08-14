@@ -246,41 +246,45 @@ def fetch_and_cache_posts(limit: int = 10, force_refresh: bool = False) -> List[
 def get_style_context(limit: int = 3, force_refresh: bool = False) -> str:
     """
     Формирует контекст стиля из постов канала maddysontg.
-    Использует реальные посты для обучения правильным формулировкам.
+    Использует реальные посты для обучения стилю, но НЕ для копирования.
     """
     global _style_context_cache
     
-    # Получаем свежие посты
     posts = fetch_and_cache_posts(limit=10, force_refresh=force_refresh)
     
     if not posts:
         return "Используй мат, чёрный юмор, сарказм и самоиронию. Пиши коротко и ёмко."
     
-    # Берём первые limit постов для примера
     sample_posts = posts[:limit]
     
-    # Формируем контекст с примерами и акцентом на грамматику
-    context = """⚠️ ЭТО ОЧЕНЬ ВАЖНО: Ниже приведены РЕАЛЬНЫЕ посты из канала. 
-Ты должен учиться ПРАВИЛЬНЫМ формулировкам именно из них. 
-Обрати внимание на грамматику, падежи, местоимения — в этих постах всё правильно.
+    # Изменяем подход: НЕ показываем полные посты, а только извлекаем стиль
+    context = """⚠️ ОБУЧЕНИЕ СТИЛЮ (НЕ КОПИРУЙ БУКВАЛЬНО!):
 
-Вот примеры постов в стиле, котором нужно писать:
+Ниже приведены примеры постов из канала. Изучи их, чтобы понять:
+- Какую лексику используют
+- Какую манеру изложения
+- Какой юмор и сарказм
+- Как строят предложения
 
+НО ТЫ ДОЛЖЕН ПИСАТЬ СВОЙ УНИКАЛЬНЫЙ ПОСТ, А НЕ КОПИРОВАТЬ ЧУЖОЙ!
+
+Примеры для изучения (НЕ ДЛЯ КОПИРОВАНИЯ):
 """
     for i, post in enumerate(sample_posts, 1):
-        context += f"--- ПРИМЕР {i} (оригинал из канала) ---\n{post}\n\n"
+        # Обрезаем пост до 150 символов, чтобы бот не мог скопировать целиком
+        preview = post[:150] + "..." if len(post) > 150 else post
+        context += f"\n--- ПРИМЕР {i} (вдохновляйся, но НЕ КОПИРУЙ) ---\n{preview}\n"
     
     context += """
-⚠️ ПРАВИЛА НА ОСНОВЕ ЭТИХ ПРИМЕРОВ:
-1. Используй ТОЧНО такие же грамматические конструкции
-2. Правильно используй падежи и местоимения (как в примерах)
-3. Не придумывай свои обороты — копируй стиль из примеров
-4. Если в примерах нет какой-то фразы — значит её не существует в этом стиле
-5. НЕЛЬЗЯ писать "глаза б на меня не глядели" — в примерах такого нет
-6. Пиши коротко, ёмко, с матом и юмором, как в примерах
+    
+⚠️ ПРАВИЛА:
+1. НЕ КОПИРУЙ тексты из примеров — пиши СВОЙ уникальный пост
+2. Используй ТОТ ЖЕ СТИЛЬ, но ДРУГИЕ ФОРМУЛИРОВКИ
+3. Те же темы, та же лексика, но своя подача
+4. НЕ повторяй фразы из примеров дословно
+5. Будь оригинален — просто подражай манере, а не тексту
 
-Пиши в ТОЧНО таком же стиле, как в примерах выше. Используй те же обороты, ту же лексику, ту же манеру изложения.
-"""
+Пиши СВОЙ пост в том же стиле, НЕ КОПИРУЯ чужие тексты."""
     
     _style_context_cache = context
     return context
@@ -292,7 +296,7 @@ def get_personality_prompt(streamer_key: str, streamer_name: str) -> str:
     personality = get_streamer_personality(streamer_key)
     
     if not personality:
-        return f"Напиши комментарий к клипу со стримером {streamer_name}. Используй стиль из примеров выше."
+        return f"Напиши свой уникальный комментарий к клипу со стримером {streamer_name}. Используй стиль из примеров (не копируй!)."
     
     nicknames = personality.get("nicknames", [streamer_name])
     traits = personality.get("traits", "")
@@ -302,25 +306,23 @@ def get_personality_prompt(streamer_key: str, streamer_name: str) -> str:
     
     main_nick = random.choice(nicknames)
     
-    base = f"""Напиши комментарий к клипу со стримером {streamer_name}.
+    base = f"""Напиши СВОЙ УНИКАЛЬНЫЙ комментарий к клипу со стримером {streamer_name}.
 
-⚠️ ИСПОЛЬЗУЙ СТИЛЬ ИЗ ПРИМЕРОВ ВЫШЕ:
-- Те же грамматические конструкции
-- Те же обороты речи
-- Те же падежи и местоимения
-- Те же выражения и мемы
+⚠️ ВДОХНОВЛЯЙСЯ СТИЛЕМ, НО НЕ КОПИРУЙ:
+- Используй ту же манеру речи
+- Те же обороты, но СВОИ формулировки
+- Те же темы, но СВОЮ подачу
 
 О стримере:
 - Называй его/её: {main_nick}
 - Характеристика: {traits}
 - Местоимения: {pronoun}, {possessive}
 
-Примеры того, как писать про этого стримера:
+Примеры правильного СТИЛЯ (не копируй текст, подражай манере):
 """
     for ex in examples[:2]:
         base += f"- {ex}\n"
     
-    # Если Ненормова — добавляем особые инструкции
     if streamer_key == "nenormova":
         base += """
 ⚠️ ОСОБЫЕ ПРАВИЛА ДЛЯ НЕНОРМОВОЙ:
@@ -330,12 +332,42 @@ def get_personality_prompt(streamer_key: str, streamer_name: str) -> str:
 - Пиши с восхищением и восторгом
 """
     
-    base += f"""
-⚠️ НЕ ПРИДУМЫВАЙ СВОИ ОБОРОТЫ — используй только те, что есть в примерах из канала!
-Если в примерах нет какой-то фразы — значит её не должно быть в твоём посте.
+    base += """
+⚠️ ГЛАВНОЕ: НЕ КОПИРУЙ ЧУЖИЕ ТЕКСТЫ! 
+Пиши СВОЙ уникальный пост, используя тот же стиль, но другие формулировки.
+Если в примерах есть фраза "Сасайрот опять крутит ботов" — не пиши так же, напиши по-своему!
 """
     
     return base
+
+def check_plagiarism(text: str, sample_posts: List[str], threshold: float = 0.35) -> bool:
+    """
+    Проверяет, не скопировал ли бот текст из примеров.
+    Возвращает True если похожесть превышает порог.
+    """
+    if not sample_posts:
+        return False
+    
+    text_words = set(text.lower().split())
+    
+    for post in sample_posts:
+        post_words = set(post.lower().split())
+        if not text_words or not post_words:
+            continue
+            
+        # Доля общих слов
+        common = text_words.intersection(post_words)
+        similarity = len(common) / max(len(text_words), len(post_words))
+        
+        if similarity > threshold:
+            logger.warning(f"⚠️ Обнаружено копирование! Похожесть: {similarity:.2f}")
+            # Показываем, какие фразы совпадают
+            common_phrases = [w for w in common if len(w) > 3]
+            if common_phrases:
+                logger.warning(f"Совпадающие слова: {common_phrases[:5]}")
+            return True
+    
+    return False
 
 def request_continuation(previous_text: str) -> str:
     if not DEEPSEEK_API_KEY:
@@ -527,6 +559,9 @@ def generate_caption_with_validation() -> Tuple[str, Optional[str]]:
         logger.error("❌ Нет ключа DeepSeek API")
         return "", streamer_key
     
+    # Получаем примеры постов для проверки плагиата
+    sample_posts = fetch_and_cache_posts(limit=5)
+    
     max_attempts = 20
     for attempt in range(max_attempts):
         try:
@@ -551,8 +586,11 @@ def generate_caption_with_validation() -> Tuple[str, Optional[str]]:
 Если пишешь про Ненормову — ТОЛЬКО ХВАЛИ и ПОДДЕРЖИВАЙ её. Не связывай её с Дианой.
 
 ⚠️ ГЛАВНОЕ ПРАВИЛО:
-НЕ ПРИДУМЫВАЙ СВОИ ФРАЗЫ! 
-Используй ТОЛЬКО те формулировки, которые есть в примерах из канала выше.
+НЕ КОПИРУЙ ЧУЖИЕ ТЕКСТЫ!
+Вдохновляйся примерами, но пиши СВОЙ уникальный пост.
+Используй те же темы, ту же манеру, ту же лексику — но свои формулировки.
+Если в примере написано "Сасайрот опять крутит ботов" — напиши по-своему, например "Сасайрот снова накручивает своих ботов, ну просто пиздец".
+
 СТРОГО ЗАПРЕЩЕНО использовать фразы: 'сижу', 'вчера сидел', 'пиво пью', 'листаю стрим', 'я думаю', 'мне кажется'.
 ОБЯЗАТЕЛЬНО раздели пост на 2 абзаца.
 Длина: 50-300 символов.
@@ -632,7 +670,7 @@ def generate_caption_with_validation() -> Tuple[str, Optional[str]]:
                 if streamer_key == "nenormova":
                     current_prompt = base_prompt + f"\n{topic_prompt}\n\n⚠️ НЕ ЗАБУДЬ: Ненормова — независимый стример, она НЕ с Дианой. ТОЛЬКО ХВАЛИ её, НЕ КРИТИКУЙ!"
                 else:
-                    current_prompt = base_prompt + f"\n{topic_prompt}\n\n⚠️ ЕЩЁ РАЗ: НЕ ПРИДУМЫВАЙ СВОИ ФРАЗЫ! Используй ТОЛЬКО формулировки из примеров выше. Мат, сарказм, юмор. Коротко, 50-300 символов. 2 абзаца. Про Диану упоминай РЕДКО и ВСКОЛЬЗЬ, только если очень к месту."
+                    current_prompt = base_prompt + f"\n{topic_prompt}\n\n⚠️ ЕЩЁ РАЗ: НЕ КОПИРУЙ ЧУЖИЕ ТЕКСТЫ! Пиши СВОЙ уникальный пост. Используй ТОЛЬКО стиль из примеров, но не их текст. Мат, сарказм, юмор. Коротко, 50-300 символов. 2 абзаца. Про Диану упоминай РЕДКО и ВСКОЛЬЗЬ, только если очень к месту."
                 logger.info(f"Пробую альтернативный промпт #{attempt}")
             
             system_prompt = get_system_prompt()
@@ -704,6 +742,11 @@ def generate_caption_with_validation() -> Tuple[str, Optional[str]]:
                 logger.warning(f"Найдена запрещённая фраза '{banned_phrase}', пробуем другой промпт...")
                 continue
             
+            # Проверяем на плагиат (копирование текстов из канала)
+            if check_plagiarism(caption, sample_posts):
+                logger.warning("❌ Пост слишком похож на оригинальные тексты из канала, пробуем снова...")
+                continue
+            
             # Проверяем количество абзацев
             paragraph_count = count_paragraphs(caption)
             
@@ -734,6 +777,11 @@ def generate_caption_with_validation() -> Tuple[str, Optional[str]]:
                 has_banned, banned_phrase = has_banned_phrases(caption)
                 if has_banned:
                     logger.warning(f"После обрезания найдена запрещённая фраза '{banned_phrase}', пробуем другой промпт...")
+                    continue
+                
+                # После обрезания проверяем плагиат
+                if check_plagiarism(caption, sample_posts):
+                    logger.warning("❌ После обрезания пост слишком похож на оригинальные тексты, пробуем снова...")
                     continue
             
             validated, error = validate_caption(caption, min_length=50, max_length=300)
