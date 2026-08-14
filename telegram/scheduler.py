@@ -1,14 +1,31 @@
 """Планировщик для автоматической публикации постов."""
 import asyncio
 import logging
-from datetime import datetime
+import random
+from datetime import datetime, timedelta
 
-from config import CHANNEL_ID, MIN_POST_INTERVAL
+from config import CHANNEL_ID
 from content.deepseek import generate_caption_with_validation
 from content.media import get_streamer_media
 from telegram.client import bot
 
 logger = logging.getLogger(__name__)
+
+# ===== НАСТРОЙКИ ИНТЕРВАЛА =====
+MIN_INTERVAL_HOURS = 1
+MAX_INTERVAL_HOURS = 3
+
+MIN_INTERVAL = MIN_INTERVAL_HOURS * 3600  # 1 час в секундах
+MAX_INTERVAL = MAX_INTERVAL_HOURS * 3600  # 3 часа в секундах
+
+# Минимум постов в день при таком интервале:
+# 24 часа / 3 часа (макс) = 8 постов в день минимум
+# 24 часа / 1 час (мин) = 24 поста в день максимум
+MIN_POSTS_PER_DAY = 24 // MAX_INTERVAL_HOURS  # 8 постов в день
+
+logger.info(f"⏰ Настройки планировщика:")
+logger.info(f"   📊 Минимум постов в день: {MIN_POSTS_PER_DAY}")
+logger.info(f"   ⏱️ Интервал: от {MIN_INTERVAL_HOURS} до {MAX_INTERVAL_HOURS} часов")
 
 async def publish_post():
     """Публикует один пост в канал."""
@@ -66,14 +83,50 @@ async def publish_post():
         logger.error(f"❌ Ошибка публикации поста: {e}")
 
 async def scheduler():
-    """Основной цикл планировщика."""
-    logger.info(f"⏰ Планировщик запущен. Интервал: {MIN_POST_INTERVAL} секунд")
+    """Основной цикл планировщика с интервалом 1-3 часа."""
+    logger.info("=" * 60)
+    logger.info("⏰ ПЛАНИРОВЩИК ЗАПУЩЕН")
+    logger.info(f"📊 Минимум постов в день: {MIN_POSTS_PER_DAY}")
+    logger.info(f"⏱️ Интервал между постами: от {MIN_INTERVAL_HOURS} до {MAX_INTERVAL_HOURS} часов")
     logger.info(f"📡 Канал для публикации: {CHANNEL_ID}")
+    logger.info("=" * 60)
     
-    # Публикуем первый пост через 10 секунд после запуска
-    await asyncio.sleep(10)
+    # Публикуем первый пост через 10-30 секунд после запуска
+    first_delay = random.randint(10, 30)
+    logger.info(f"⏳ Первый пост через {first_delay} секунд...")
+    await asyncio.sleep(first_delay)
     await publish_post()
     
+    # Счётчик постов для статистики
+    post_count = 1
+    last_post_time = datetime.now()
+    
     while True:
-        await asyncio.sleep(MIN_POST_INTERVAL)
+        # Вычисляем следующий интервал (1-3 часа)
+        next_interval = random.randint(MIN_INTERVAL, MAX_INTERVAL)
+        
+        # Логируем следующий пост
+        next_post_time = datetime.now() + timedelta(seconds=next_interval)
+        hours = next_interval // 3600
+        minutes = (next_interval % 3600) // 60
+        logger.info(f"⏳ Следующий пост через {hours}ч {minutes}м")
+        logger.info(f"📅 Ожидаемое время: {next_post_time.strftime('%H:%M:%S')}")
+        
+        await asyncio.sleep(next_interval)
         await publish_post()
+        
+        post_count += 1
+        last_post_time = datetime.now()
+        
+        # Статистика
+        logger.info(f"📊 Всего опубликовано постов: {post_count}")
+        
+        # Проверяем, достаточно ли постов за день
+        now = datetime.now()
+        if post_count >= MIN_POSTS_PER_DAY:
+            logger.info(f"✅ Норма {MIN_POSTS_PER_DAY} постов в день выполнена!")
+        else:
+            remaining = MIN_POSTS_PER_DAY - post_count
+            hours_left = 24 - now.hour - 1
+            if hours_left > 0 and remaining > 0:
+                logger.info(f"📊 Осталось постов до нормы: {remaining}")
