@@ -547,13 +547,13 @@ def generate_caption_with_validation() -> Tuple[str, Optional[str]]:
         style = 'streamer'
         streamer_key, streamer_display = get_streamer_for_post()
         topic = f"стример {streamer_display}"
-        logger.info(f"Генерация поста про {streamer_display}")
+        logger.info(f"🎯 ТЕМА: СТРИМЕР - {streamer_display}")
     else:
         style = 'asia'
         streamer_key = None
         streamer_display = None
         topic = "Азия"
-        logger.info(f"Генерация поста про Азию")
+        logger.info(f"🎯 ТЕМА: АЗИЯ")
     
     if not DEEPSEEK_API_KEY:
         logger.error("❌ Нет ключа DeepSeek API")
@@ -672,6 +672,12 @@ def generate_caption_with_validation() -> Tuple[str, Optional[str]]:
                 else:
                     current_prompt = base_prompt + f"\n{topic_prompt}\n\n⚠️ ЕЩЁ РАЗ: НЕ КОПИРУЙ ЧУЖИЕ ТЕКСТЫ! Пиши СВОЙ уникальный пост. Используй ТОЛЬКО стиль из примеров, но не их текст. Мат, сарказм, юмор. Коротко, 50-300 символов. 2 абзаца. Про Диану упоминай РЕДКО и ВСКОЛЬЗЬ, только если очень к месту."
                 logger.info(f"Пробую альтернативный промпт #{attempt}")
+            
+            # ===== СТРОГОЕ РАЗДЕЛЕНИЕ ТЕМ =====
+            if style == 'streamer':
+                current_prompt += "\n\n⚠️ ВАЖНО: Пиши ТОЛЬКО про стримеров! НЕ пиши про Азию, Японию, Корею и азиатских девушек!"
+            elif style == 'asia':
+                current_prompt += "\n\n⚠️ ВАЖНО: Пиши ТОЛЬКО про Азию! НЕ пиши про стримеров, Дианочку и стриминг!"
             
             system_prompt = get_system_prompt()
             
