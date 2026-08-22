@@ -2,8 +2,7 @@
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, CommandHandler, CallbackQueryHandler
-from bot_modules.client import dp
-from config import OWNER_ID, CHANNEL_ID
+from bot_modules.client import application
 
 logger = logging.getLogger(__name__)
 
@@ -38,5 +37,5 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 
 # Регистрируем обработчики
-dp.add_handler(CommandHandler("start", start_command))
-dp.add_handler(CommandHandler("help", help_command))
+application.add_handler(CommandHandler("start", start_command))
+application.add_handler(CommandHandler("help", help_command))
