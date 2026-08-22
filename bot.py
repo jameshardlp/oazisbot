@@ -1,3 +1,63 @@
+"""Точка входа бота: вебхук-сервер + long polling."""
+import asyncio
+import logging
+import os
+import sys
+
+from aiohttp import web
+
+# Импорты из установленной библиотеки python-telegram-bot
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CallbackQueryHandler, CommandHandler
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+
+from config import FREEKASSA_SHOP_ID, FREEKASSA_SECRET1, SEND_DELAY, BOT_TOKEN
+from bot_modules.client import application, bot
+from bot_modules import handlers
+from bot_modules.scheduler import scheduler
+from bot_modules.meme_scheduler import meme_scheduler
+from payments.webhooks import freekassa_webhook, aurapay_webhook
+
+# Импортируем обработчик для /broadcast
+from bot_modules.handlers.broadcast import get_broadcast_conversation_handler, broadcast_callback
+
+# Импортируем обработчик для /resend
+from bot_modules.handlers.resend import get_resend_conversation_handler
+
+# Импортируем административные обработчики
+from bot_modules.handlers.admin import register_admin_handlers
+
+# Импортируем базовые обработчики
+from bot_modules.handlers.basic import register_basic_handlers
+
+logger = logging.getLogger(__name__)
+
+
+async def start_webhook_server(app: web.Application) -> None:
+    """Поднимает сервер для приёма вебхуков FreeKassa и AuraPay."""
+    port = int(os.getenv("PORT", 8080))
+    app.router.add_post("/freekassa/webhook", freekassa_webhook)
+    app.router.add_post("/aurapay/webhook", aurapay_webhook)
+
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+    logger.info(f"🌐 Webhook сервер на порту {port}")
+
+
+async def shutdown_tasks() -> None:
+    """Корректно завершает задачи."""
+    tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
+    for task in tasks:
+        task.cancel()
+    await asyncio.gather(*tasks, return_exceptions=True)
+
+
 async def main() -> None:
     """Основная асинхронная функция."""
     logger.info("=" * 60)
@@ -46,8 +106,9 @@ async def main() -> None:
         await application.updater.start_polling()
         logger.info("✅ Бот запущен и готов к работе")
         
-        # Ждём сигнала остановки
-        await asyncio.Event().wait()
+        # Держим бота активным
+        while True:
+            await asyncio.sleep(1)
         
     except (KeyboardInterrupt, asyncio.CancelledError):
         logger.info("🛑 Получен сигнал остановки")
@@ -64,3 +125,13 @@ async def main() -> None:
         
         await shutdown_tasks()
         logger.info("✅ Бот остановлен")
+
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logger.info("🛑 Бот остановлен пользователем")
+    except Exception as e:
+        logger.error(f"❌ Фатальная ошибка: {e}")
+        sys.exit(1)
