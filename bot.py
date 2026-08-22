@@ -3,6 +3,7 @@ import asyncio
 import logging
 import os
 import sys
+import threading
 
 from aiohttp import web
 
@@ -58,7 +59,22 @@ def start_bot() -> None:
     logger.info("=" * 60)
 
     # Создаём Updater для старой версии
-    updater = Updater(token=BOT_TOKEN, use_context=True)
+    # В старых версиях Updater принимает bot или token как позиционный аргумент
+    try:
+        # Пробуем создать через bot
+        from telegram import Bot
+        bot = Bot(token=BOT_TOKEN)
+        updater = Updater(bot=bot, use_context=True)
+    except TypeError:
+        try:
+            # Пробуем через token как позиционный аргумент
+            updater = Updater(BOT_TOKEN, use_context=True)
+        except TypeError:
+            # Пробуем без аргументов
+            updater = Updater(use_context=True)
+            # Затем устанавливаем токен
+            updater.bot = Bot(token=BOT_TOKEN)
+    
     dp = updater.dispatcher
 
     # Регистрируем административные команды
@@ -90,7 +106,6 @@ async def main() -> None:
         await start_webhook_server(web.Application())
     
     # Запускаем бота синхронно в отдельном потоке
-    import threading
     bot_thread = threading.Thread(target=start_bot)
     bot_thread.start()
     
