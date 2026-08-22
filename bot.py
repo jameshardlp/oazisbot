@@ -1,7 +1,4 @@
-"""Точка входа бота: вебхук-сервер + long polling.
-
-Запуск:  python bot.py
-"""
+"""Точка входа бота: вебхук-сервер + long polling."""
 import asyncio
 import logging
 import os
@@ -25,11 +22,6 @@ logger = logging.getLogger(__name__)
 
 
 async def start_webhook_server(app: web.Application) -> None:
-    """Поднимает сервер для приёма вебхуков FreeKassa и AuraPay.
-
-    Порог запуска прежний: оба параметра FreeKassa обязательны. Без них
-    рублёвые и AuraPay-вебхуки недоступны (см. комментарий в freekassa.py).
-    """
     port = int(os.getenv("PORT", 8080))
     app.router.add_post("/freekassa/webhook", freekassa_webhook)
     app.router.add_post("/aurapay/webhook", aurapay_webhook)
@@ -44,19 +36,18 @@ async def start_webhook_server(app: web.Application) -> None:
 async def main() -> None:
     logger.info("=" * 60)
     logger.info("🤖 БОТ ЗАПУЩЕН")
-    logger.info("📸 Генерация постов про стримеров")
-    logger.info("🎬 ДОПОЛНИТЕЛЬНО: автоматическая публикация мемов")
+    logger.info("📸 Посты про стримеров (текст + ссылки на YouTube)")
+    logger.info("🎬 Мемы из каналов (пересылка без текста)")
     logger.info("📦 Источники мемов: videos_dolboyoba, shitcollection, postleftism, noviop")
-    logger.info(f"⏱️ Задержка между постами: {SEND_DELAY} секунд")
     logger.info("=" * 60)
 
     if FREEKASSA_SHOP_ID and FREEKASSA_SECRET1:
         await start_webhook_server(web.Application())
 
-    # Запускаем старый планировщик (посты про стримеров)
+    # Запускаем планировщик стримеров
     asyncio.create_task(scheduler())
     
-    # Запускаем новый планировщик (мемы)
+    # Запускаем планировщик мемов
     asyncio.create_task(meme_scheduler())
 
     await bot.delete_webhook(drop_pending_updates=True)
