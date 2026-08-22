@@ -413,7 +413,7 @@ def validate_post_with_deepseek(post_text: str) -> Tuple[bool, str]:
             "messages": [
                 {"role": "system", "content": """Ты — строгий модератор контента. Проверяй посты на соответствие правилам:
 
-1. Пост должен быть о стримерах или Азии (по теме)
+1. Пост должен быть о стримерах (по теме)
 2. Допускается грубая лексика и мат (это стиль автора)
 3. Пост должен быть грамотным
 4. Пост должен быть завершённым
@@ -542,18 +542,11 @@ def generate_caption_with_validation() -> Tuple[str, Optional[str]]:
     # Получаем стиль из канала maddysontg через веб-парсер
     style_context = get_style_context(limit=5)
     
-    rand = random.random()
-    if rand < 0.85:
-        style = 'streamer'
-        streamer_key, streamer_display = get_streamer_for_post()
-        topic = f"стример {streamer_display}"
-        logger.info(f"🎯 ТЕМА: СТРИМЕР - {streamer_display}")
-    else:
-        style = 'asia'
-        streamer_key = None
-        streamer_display = None
-        topic = "Азия"
-        logger.info(f"🎯 ТЕМА: АЗИЯ")
+    # Всегда выбираем тему стримеров (убрана Азия)
+    style = 'streamer'
+    streamer_key, streamer_display = get_streamer_for_post()
+    topic = f"стример {streamer_display}"
+    logger.info(f"🎯 ТЕМА: СТРИМЕР - {streamer_display}")
     
     if not DEEPSEEK_API_KEY:
         logger.error("❌ Нет ключа DeepSeek API")
@@ -598,7 +591,7 @@ def generate_caption_with_validation() -> Tuple[str, Optional[str]]:
             
             # Получаем персонализированный промпт для стримера
             personality_prompt = ""
-            if style == 'streamer' and streamer_key:
+            if streamer_key:
                 personality_prompt = get_personality_prompt(streamer_key, streamer_display)
             
             streamer_topics = []
@@ -646,25 +639,13 @@ def generate_caption_with_validation() -> Tuple[str, Optional[str]]:
                     "Смотришь клип со стримером. Напиши что ты видишь и почему это смешно, в стиле примеров.",
                 ]
             
-            asian_topics = [
-                "Ты смотришь фото из Азии. Что ты видишь? Почему это смешно или странно? Используй мат, сарказм, как в примерах.",
-                "Фото из Азии. Что за херня там происходит? Напиши короткий комментарий в стиле примеров.",
-                "Ты смотришь видео из Азии. Что за дичь там творится? Опиши что происходит и почему это смешно, как в примерах.",
-                "Азия, бля... Ты смотришь фото и не понимаешь что происходит. Напиши свой комментарий в стиле примеров.",
-                "Фото из Азии — там какая-то жесть. Твой комментарий к этому, как в примерах.",
-                "Видео из Азии. Напиши что ты видишь и почему это забавно, в стиле примеров.",
-            ]
-            
             if attempt % 2 == 0:
-                if style == 'streamer' and personality_prompt:
+                if personality_prompt:
                     current_prompt = base_prompt + random.choice(streamer_topics[:3])
                 else:
-                    current_prompt = base_prompt + random.choice(streamer_topics if style == 'streamer' else asian_topics)
+                    current_prompt = base_prompt + random.choice(streamer_topics)
             else:
-                if style == 'streamer':
-                    topic_prompt = random.choice(streamer_topics)
-                else:
-                    topic_prompt = random.choice(asian_topics)
+                topic_prompt = random.choice(streamer_topics)
                 
                 # Если Ненормова — добавляем дополнительное напоминание хвалить
                 if streamer_key == "nenormova":
@@ -673,11 +654,8 @@ def generate_caption_with_validation() -> Tuple[str, Optional[str]]:
                     current_prompt = base_prompt + f"\n{topic_prompt}\n\n⚠️ ЕЩЁ РАЗ: НЕ КОПИРУЙ ЧУЖИЕ ТЕКСТЫ! Пиши СВОЙ уникальный пост. Используй ТОЛЬКО стиль из примеров, но не их текст. Мат, сарказм, юмор. Коротко, 50-300 символов. 2 абзаца. Про Диану упоминай РЕДКО и ВСКОЛЬЗЬ, только если очень к месту."
                 logger.info(f"Пробую альтернативный промпт #{attempt}")
             
-            # ===== СТРОГОЕ РАЗДЕЛЕНИЕ ТЕМ =====
-            if style == 'streamer':
-                current_prompt += "\n\n⚠️ ВАЖНО: Пиши ТОЛЬКО про стримеров! НЕ пиши про Азию, Японию, Корею и азиатских девушек!"
-            elif style == 'asia':
-                current_prompt += "\n\n⚠️ ВАЖНО: Пиши ТОЛЬКО про Азию! НЕ пиши про стримеров, Дианочку и стриминг!"
+            # ===== СТРОГОЕ УКАЗАНИЕ ТОЛЬКО ПРО СТРИМЕРОВ =====
+            current_prompt += "\n\n⚠️ ВАЖНО: Пиши ТОЛЬКО про стримеров! НЕ пиши про Азию, Японию, Корею, азиатских девушек или любые другие темы!"
             
             system_prompt = get_system_prompt()
             
