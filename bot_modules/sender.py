@@ -1,94 +1,86 @@
-"""Отправка постов с ретраями и антифлуд-задержкой."""
-import re
-import logging
+"""Модуль для отправки сообщений с повторными попытками."""
 import asyncio
-import time
-from collections import defaultdict
-
-from aiogram.exceptions import TelegramAPIError
-
-from config import SEND_DELAY
-from storage import load_users, save_users
-from content.deepseek import generate_caption_with_validation
-from content.text import clean_text, truncate_by_sentences
-from telegram.client import bot
+import logging
+from typing import Optional, Union
+from telegram import Message, PhotoSize, Video, Animation, Document, InputFile
+from bot_modules.client import bot  # <-- ИСПРАВЛЕНО!
 
 logger = logging.getLogger(__name__)
 
-last_user_message_time = defaultdict(float)
 
-async def send_post_with_retry(chat_id, photo_url=None, caption=None, media_type='photo', max_retries=3):
-    current_time = time.time()
-    last_time = last_user_message_time.get(chat_id, 0)
-    time_since_last = current_time - last_time
-
-    if time_since_last < SEND_DELAY:
-        wait_time = SEND_DELAY - time_since_last
-        logger.info(f"⏳ Ожидание {wait_time:.1f} сек перед отправкой пользователю {chat_id}")
-        await asyncio.sleep(wait_time)
-    
-    last_user_message_time[chat_id] = time.time()
-    
+async def send_post_with_retry(
+    chat_id: int,
+    text: Optional[str] = None,
+    photo: Optional[Union[str, bytes, PhotoSize, InputFile]] = None,
+    video: Optional[Union[str, bytes, Video, InputFile]] = None,
+    animation: Optional[Union[str, bytes, Animation, InputFile]] = None,
+    document: Optional[Union[str, bytes, Document, InputFile]] = None,
+    caption: Optional[str] = None,
+    parse_mode: Optional[str] = "Markdown",
+    disable_notification: bool = False,
+    reply_to_message_id: Optional[int] = None,
+    max_retries: int = 3,
+    retry_delay: int = 5,
+) -> Optional[Message]:
+    """
+    Отправляет сообщение с повторными попытками при ошибках.
+    """
     for attempt in range(max_retries):
         try:
-            if not photo_url and not caption:
-                return False
-            
-            if not photo_url:
-                if caption:
-                    await bot.send_message(chat_id=chat_id, text=caption)
-                return True
-            
-            if not caption:
-                caption, _ = await asyncio.to_thread(generate_caption_with_validation)
-                caption = clean_text(caption)
-                caption = truncate_by_sentences(caption, max_length=1023)
-            
-            if media_type == 'clip':
-                text = f"{caption}\n\n{photo_url}"
-                await bot.send_message(chat_id=chat_id, text=text)
-            elif media_type == 'text':
-                await bot.send_message(chat_id=chat_id, text=caption)
+            if photo:
+                message = await bot.send_photo(
+                    chat_id=chat_id,
+                    photo=photo,
+                    caption=caption or text,
+                    parse_mode=parse_mode,
+                    disable_notification=disable_notification,
+                    reply_to_message_id=reply_to_message_id,
+                )
+            elif video:
+                message = await bot.send_video(
+                    chat_id=chat_id,
+                    video=video,
+                    caption=caption or text,
+                    parse_mode=parse_mode,
+                    disable_notification=disable_notification,
+                    reply_to_message_id=reply_to_message_id,
+                )
+            elif animation:
+                message = await bot.send_animation(
+                    chat_id=chat_id,
+                    animation=animation,
+                    caption=caption or text,
+                    parse_mode=parse_mode,
+                    disable_notification=disable_notification,
+                    reply_to_message_id=reply_to_message_id,
+                )
+            elif document:
+                message = await bot.send_document(
+                    chat_id=chat_id,
+                    document=document,
+                    caption=caption or text,
+                    parse_mode=parse_mode,
+                    disable_notification=disable_notification,
+                    reply_to_message_id=reply_to_message_id,
+                )
             else:
-                if len(caption) > 1024:
-                    caption = truncate_by_sentences(caption, max_length=1023)
-                await bot.send_photo(chat_id=chat_id, photo=photo_url, caption=caption)
+                message = await bot.send_message(
+                    chat_id=chat_id,
+                    text=text or caption or "",
+                    parse_mode=parse_mode,
+                    disable_notification=disable_notification,
+                    reply_to_message_id=reply_to_message_id,
+                )
             
-            return True
+            logger.info(f"✅ Сообщение отправлено в чат {chat_id}")
+            return message
             
-        except TelegramAPIError as e:
-            error_str = str(e).lower()
-
-            if "too many requests" in error_str or "retry after" in error_str:
-                match = re.search(r"retry after (\d+)", str(e))
-                if match:
-                    wait_time = int(match.group(1)) + 1
-                else:
-                    wait_time = 5 * (attempt + 1)
-                
-                logger.warning(f"⚠️ Лимит превышен для {chat_id}. Ожидание {wait_time} сек. Попытка {attempt+1}/{max_retries}")
-                await asyncio.sleep(wait_time)
-                continue
-                
-            elif "forbidden" in error_str or "chat not found" in error_str:
-                users_list = load_users()
-                if chat_id in users_list:
-                    users_list.remove(chat_id)
-                    save_users(users_list)
-                    logger.info(f"👤 Пользователь {chat_id} удалён")
-                return False
-            else:
-                logger.error(f"❌ Ошибка Telegram при отправке в {chat_id}: {e}")
-                if attempt < max_retries - 1:
-                    await asyncio.sleep(2)
-                    continue
-                return False
-                
         except Exception as e:
-            logger.error(f"❌ Ошибка отправки в {chat_id}: {e}")
+            logger.warning(f"⚠️ Попытка {attempt + 1}/{max_retries} не удалась: {e}")
             if attempt < max_retries - 1:
-                await asyncio.sleep(2)
-                continue
-            return False
+                await asyncio.sleep(retry_delay)
+            else:
+                logger.error(f"❌ Все попытки отправки в чат {chat_id} провалились")
+                return None
     
-    return False
+    return None
