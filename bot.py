@@ -16,7 +16,7 @@ logging.basicConfig(
 )
 
 from config import FREEKASSA_SHOP_ID, FREEKASSA_SECRET1, SEND_DELAY, BOT_TOKEN
-from bot_modules.client import application
+from bot_modules.client import application, bot
 from bot_modules import handlers
 from bot_modules.scheduler import scheduler
 from bot_modules.meme_scheduler import meme_scheduler
@@ -47,30 +47,30 @@ async def start_webhook_server(app: web.Application) -> None:
     logger.info(f"🌐 Webhook сервер на порту {port}")
 
 
-def start_bot() -> None:
-    """Запускает бота через Application для версии 20.7."""
+async def main() -> None:
+    """Основная асинхронная функция."""
     logger.info("=" * 60)
-    logger.info("🤖 БОТ ЗАПУЩЕН (версия 20.7)")
+    logger.info("🤖 БОТ ЗАПУЩЕН")
     logger.info("📸 Посты про стримеров (текст + ссылки на YouTube)")
     logger.info("🎬 Мемы из каналов (скачивание и отправка)")
     logger.info("📦 Источники мемов: videos_dolboyoba, shitcollection, postleftism, noviop")
     logger.info("📤 Команда /resend — отправка контента в канал от имени бота")
     logger.info("=" * 60)
 
-    # Создаём Application для версии 20.7
-    app = Application.builder().token(BOT_TOKEN).build()
+    if FREEKASSA_SHOP_ID and FREEKASSA_SECRET1:
+        await start_webhook_server(web.Application())
 
     # Регистрируем административные команды
-    register_admin_handlers(app)
+    register_admin_handlers(application)
 
     # Добавляем обработчик для /broadcast (реклама)
     broadcast_handler = get_broadcast_conversation_handler()
-    app.add_handler(broadcast_handler)
-    app.add_handler(CallbackQueryHandler(broadcast_callback, pattern="^(pay_with_stars|pay_with_card|cancel_broadcast|cancel_stars_payment)$"))
+    application.add_handler(broadcast_handler)
+    application.add_handler(CallbackQueryHandler(broadcast_callback, pattern="^(pay_with_stars|pay_with_card|cancel_broadcast|cancel_stars_payment)$"))
 
     # Добавляем обработчик для /resend (ручная отправка в канал)
     resend_handler = get_resend_conversation_handler()
-    app.add_handler(resend_handler)
+    application.add_handler(resend_handler)
 
     # Запускаем планировщик стримеров
     asyncio.create_task(scheduler())
@@ -79,21 +79,10 @@ def start_bot() -> None:
     asyncio.create_task(meme_scheduler())
 
     # Запускаем polling через Application
-    app.run_polling()
-
-
-async def main() -> None:
-    """Основная асинхронная функция."""
-    if FREEKASSA_SHOP_ID and FREEKASSA_SECRET1:
-        await start_webhook_server(web.Application())
-    
-    # Запускаем бота синхронно в отдельном потоке
-    import threading
-    bot_thread = threading.Thread(target=start_bot)
-    bot_thread.start()
-    
-    # Ждём завершения
-    bot_thread.join()
+    await application.initialize()
+    await application.start()
+    await application.updater.start_polling()
+    await application.idle()
 
 
 if __name__ == "__main__":
