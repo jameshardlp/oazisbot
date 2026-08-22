@@ -3,13 +3,12 @@ import asyncio
 import logging
 import os
 import sys
-import threading
 
 from aiohttp import web
 
 # Импорты из установленной библиотеки python-telegram-bot
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import CallbackQueryHandler, CommandHandler, Updater
+from telegram.ext import Application, CallbackQueryHandler, CommandHandler
 
 logging.basicConfig(
     level=logging.INFO,
@@ -49,45 +48,29 @@ async def start_webhook_server(app: web.Application) -> None:
 
 
 def start_bot() -> None:
-    """Запускает бота через Updater для старых версий."""
+    """Запускает бота через Application для версии 20.7."""
     logger.info("=" * 60)
-    logger.info("🤖 БОТ ЗАПУЩЕН (старая версия библиотеки)")
+    logger.info("🤖 БОТ ЗАПУЩЕН (версия 20.7)")
     logger.info("📸 Посты про стримеров (текст + ссылки на YouTube)")
     logger.info("🎬 Мемы из каналов (скачивание и отправка)")
     logger.info("📦 Источники мемов: videos_dolboyoba, shitcollection, postleftism, noviop")
     logger.info("📤 Команда /resend — отправка контента в канал от имени бота")
     logger.info("=" * 60)
 
-    # Создаём Updater для старой версии
-    # В старых версиях Updater принимает bot или token как позиционный аргумент
-    try:
-        # Пробуем создать через bot
-        from telegram import Bot
-        bot = Bot(token=BOT_TOKEN)
-        updater = Updater(bot=bot, use_context=True)
-    except TypeError:
-        try:
-            # Пробуем через token как позиционный аргумент
-            updater = Updater(BOT_TOKEN, use_context=True)
-        except TypeError:
-            # Пробуем без аргументов
-            updater = Updater(use_context=True)
-            # Затем устанавливаем токен
-            updater.bot = Bot(token=BOT_TOKEN)
-    
-    dp = updater.dispatcher
+    # Создаём Application для версии 20.7
+    app = Application.builder().token(BOT_TOKEN).build()
 
     # Регистрируем административные команды
-    register_admin_handlers()
+    register_admin_handlers(app)
 
     # Добавляем обработчик для /broadcast (реклама)
     broadcast_handler = get_broadcast_conversation_handler()
-    dp.add_handler(broadcast_handler)
-    dp.add_handler(CallbackQueryHandler(broadcast_callback, pattern="^(pay_with_stars|pay_with_card|cancel_broadcast|cancel_stars_payment)$"))
+    app.add_handler(broadcast_handler)
+    app.add_handler(CallbackQueryHandler(broadcast_callback, pattern="^(pay_with_stars|pay_with_card|cancel_broadcast|cancel_stars_payment)$"))
 
     # Добавляем обработчик для /resend (ручная отправка в канал)
     resend_handler = get_resend_conversation_handler()
-    dp.add_handler(resend_handler)
+    app.add_handler(resend_handler)
 
     # Запускаем планировщик стримеров
     asyncio.create_task(scheduler())
@@ -95,9 +78,8 @@ def start_bot() -> None:
     # Запускаем планировщик мемов
     asyncio.create_task(meme_scheduler())
 
-    # Запускаем polling через Updater
-    updater.start_polling()
-    updater.idle()
+    # Запускаем polling через Application
+    app.run_polling()
 
 
 async def main() -> None:
@@ -106,6 +88,7 @@ async def main() -> None:
         await start_webhook_server(web.Application())
     
     # Запускаем бота синхронно в отдельном потоке
+    import threading
     bot_thread = threading.Thread(target=start_bot)
     bot_thread.start()
     
