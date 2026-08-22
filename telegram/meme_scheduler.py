@@ -5,6 +5,7 @@ import random
 import io
 import time
 from datetime import datetime, timedelta
+from typing import Optional  # <--- ДОБАВЛЯЕМ ЭТУ СТРОКУ
 
 import requests
 from config import CHANNEL_ID
@@ -27,8 +28,7 @@ def download_media(url: str) -> Optional[io.BytesIO]:
             content_type = response.headers.get('content-type', '')
             if 'image' in content_type or 'video' in content_type or 'gif' in content_type:
                 return io.BytesIO(response.content)
-            # Если content-type неизвестен, но это похоже на файл
-            if len(response.content) > 10000:  # больше 10KB
+            if len(response.content) > 10000:
                 return io.BytesIO(response.content)
         return None
     except Exception as e:
@@ -42,7 +42,6 @@ def get_direct_media_url(post_url: str) -> Optional[str]:
         if response.status_code != 200:
             return None
         
-        # Ищем прямые ссылки на файлы
         import re
         patterns = [
             r'https?://[^\s]+\.(jpg|jpeg|png|gif|mp4|webm|webp)[^\s]*',
@@ -76,8 +75,6 @@ async def send_meme_to_channel() -> bool:
         
         logger.info(f"📥 Обрабатываю мем из {source_name} (ID: {message_id})")
         
-        # Пробуем получить прямую ссылку на медиа
-        # Формируем URL поста
         post_url = f"https://t.me/{source_channel.replace('@', '')}/{message_id}"
         logger.info(f"🔗 Загружаю страницу поста: {post_url}")
         
@@ -88,13 +85,11 @@ async def send_meme_to_channel() -> bool:
         
         logger.info(f"📥 Скачиваю медиа: {direct_url[:80]}...")
         
-        # Скачиваем в память
         media_data = download_media(direct_url)
         if not media_data:
             logger.warning(f"⚠️ Не удалось скачать медиа")
             return False
         
-        # Определяем тип по расширению
         url_lower = direct_url.lower()
         if any(ext in url_lower for ext in ['.jpg', '.jpeg', '.png', '.webp']):
             media_type = 'photo'
@@ -105,11 +100,11 @@ async def send_meme_to_channel() -> bool:
         else:
             media_type = 'document'
         
-        filename = f"meme_{int(time.time())}.{direct_url.split('.')[-1].split('?')[0][:4]}"
+        ext = direct_url.split('.')[-1].split('?')[0][:4]
+        filename = f"meme_{int(time.time())}.{ext}"
         
         logger.info(f"📤 Отправляю {media_type} ({len(media_data.getvalue()) // 1024}KB)")
         
-        # Отправляем
         if media_type == 'photo':
             await bot.send_photo(
                 chat_id=CHANNEL_ID,
