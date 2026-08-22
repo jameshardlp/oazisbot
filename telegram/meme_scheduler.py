@@ -33,8 +33,7 @@ def download_media(url: str) -> Optional[io.BytesIO]:
             content_type = response.headers.get('content-type', '')
             if any(t in content_type for t in ['image', 'video', 'gif']):
                 return io.BytesIO(response.content)
-            # Если content-type неизвестен, но это похоже на файл
-            if len(response.content) > 10000:  # больше 10KB
+            if len(response.content) > 10000:
                 return io.BytesIO(response.content)
         return None
     except Exception as e:
@@ -57,7 +56,6 @@ def get_direct_media_url(post_url: str) -> Optional[str]:
         img_pattern = r'<img[^>]+src="(https?://[^"]+\.(?:jpg|jpeg|png|gif|webp))"'
         img_matches = re.findall(img_pattern, html, re.IGNORECASE)
         if img_matches:
-            # Выбираем самое большое изображение (обычно последнее в списке)
             return img_matches[-1]
 
         video_pattern = r'<video[^>]+src="(https?://[^"]+\.(?:mp4|webm|mov))"'
@@ -65,7 +63,7 @@ def get_direct_media_url(post_url: str) -> Optional[str]:
         if video_matches:
             return video_matches[0]
 
-        # 2. Ищем ссылки на файлы через data-bem (как в парсере @maddysontg)
+        # 2. Ищем ссылки на файлы через data-bem
         bem_pattern = r'data-bem="({[^"]+})"'
         bem_matches = re.findall(bem_pattern, html)
         for bem_json in bem_matches:
@@ -84,7 +82,7 @@ def get_direct_media_url(post_url: str) -> Optional[str]:
             except:
                 pass
 
-        # 3. Ищем любые ссылки с расширениями файлов в тексте
+        # 3. Ищем любые ссылки с расширениями файлов
         file_pattern = r'https?://[^\s"\']+\.(?:jpg|jpeg|png|gif|mp4|webm|webp)'
         file_matches = re.findall(file_pattern, html, re.IGNORECASE)
         if file_matches:
@@ -94,9 +92,8 @@ def get_direct_media_url(post_url: str) -> Optional[str]:
         tg_file_pattern = r'https?://t\.me/[^/]+/\d+'
         tg_file_matches = re.findall(tg_file_pattern, html)
         if tg_file_matches:
-            # Пробуем загрузить страницу поста и найти там изображение
             for tg_url in tg_file_matches:
-                return get_direct_media_url(tg_url)  # Рекурсивно пробуем
+                return get_direct_media_url(tg_url)
 
         logger.warning(f"⚠️ Не найдена прямая ссылка на медиа в посте {post_url}")
         return None
@@ -148,34 +145,28 @@ async def send_meme_to_channel() -> bool:
         else:
             media_type = 'document'
 
-        ext = direct_url.split('.')[-1].split('?')[0][:4]
-        filename = f"meme_{int(time.time())}.{ext}"
-
         logger.info(f"📤 Отправляю {media_type} ({len(media_data.getvalue()) // 1024}KB)")
 
+        # Отправляем БЕЗ аргумента filename
         if media_type == 'photo':
             await bot.send_photo(
                 chat_id=CHANNEL_ID,
-                photo=media_data,
-                filename=filename
+                photo=media_data
             )
         elif media_type == 'video':
             await bot.send_video(
                 chat_id=CHANNEL_ID,
-                video=media_data,
-                filename=filename
+                video=media_data
             )
         elif media_type == 'animation':
             await bot.send_animation(
                 chat_id=CHANNEL_ID,
-                animation=media_data,
-                filename=filename
+                animation=media_data
             )
         else:
             await bot.send_document(
                 chat_id=CHANNEL_ID,
-                document=media_data,
-                filename=filename
+                document=media_data
             )
 
         logger.info(f"✅ Мем из {source_name} опубликован!")
