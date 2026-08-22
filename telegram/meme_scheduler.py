@@ -1,4 +1,4 @@
-"""Планировщик для публикации мемов (пересылка из каналов)."""
+"""Планировщик для публикации мемов (копирование сообщений)."""
 import asyncio
 import logging
 import random
@@ -14,9 +14,9 @@ MIN_INTERVAL = 3600
 MAX_INTERVAL = 10800
 
 async def send_meme_to_channel() -> bool:
-    """Пересылает мем в канал."""
+    """Копирует мем в канал (без упоминания источника)."""
     try:
-        # Получаем данные для пересылки
+        # Получаем данные для копирования
         meme_data = get_random_meme_to_forward()
         if not meme_data:
             logger.warning("⚠️ Нет доступных мемов")
@@ -28,11 +28,11 @@ async def send_meme_to_channel() -> bool:
         if not source_channel or not message_id:
             return False
         
-        logger.info(f"📤 Пересылаю мем из {source_channel} (ID: {message_id})")
+        logger.info(f"📤 Копирую мем из {source_channel} (ID: {message_id})")
         
-        # Пересылаем сообщение в канал
-        # forward_message скрывает источник, если бот не администратор
-        await bot.forward_message(
+        # Используем copy_message вместо forward_message
+        # copy_message создаёт копию сообщения без ссылки на оригинал
+        await bot.copy_message(
             chat_id=CHANNEL_ID,
             from_chat_id=source_channel,
             message_id=message_id
@@ -44,9 +44,11 @@ async def send_meme_to_channel() -> bool:
     except Exception as e:
         error_msg = str(e).lower()
         if "not found" in error_msg:
-            logger.warning("⚠️ Сообщение не найдено, возможно удалено")
+            logger.warning(f"⚠️ Сообщение {message_id} не найдено")
+        elif "chat not found" in error_msg:
+            logger.warning(f"⚠️ Канал {source_channel} не доступен для копирования")
         else:
-            logger.error(f"❌ Ошибка пересылки: {e}")
+            logger.error(f"❌ Ошибка копирования: {e}")
         return False
 
 async def meme_scheduler():
