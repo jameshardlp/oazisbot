@@ -2,8 +2,10 @@
 import logging
 from typing import Optional
 
-from bot_modules import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from bot_modules.ext import ContextTypes, ConversationHandler, CommandHandler, MessageHandler, filters
+# Импорты из установленной библиотеки python-telegram-bot
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ContextTypes, ConversationHandler, CommandHandler, MessageHandler, filters
+
 from config import OWNER_ID, CHANNEL_ID
 from bot_modules.client import bot
 
