@@ -14,7 +14,7 @@ import requests
 from telegram import InputFile
 from config import CHANNEL_ID
 from content.meme_forwarder import get_random_meme_to_forward
-from bot_modules.client import application
+from bot_modules.client import bot  # <-- ИСПРАВЛЕНО!
 
 logger = logging.getLogger(__name__)
 
@@ -252,22 +252,22 @@ async def send_meme_to_channel() -> bool:
 
         # Отправляем с использованием InputFile
         if media_type == 'photo':
-            await application.bot.send_photo(
+            await bot.send_photo(
                 chat_id=CHANNEL_ID,
                 photo=InputFile(media_data, filename=f"meme_{int(time.time())}.jpg")
             )
         elif media_type == 'video':
-            await application.bot.send_video(
+            await bot.send_video(
                 chat_id=CHANNEL_ID,
                 video=InputFile(media_data, filename=f"meme_{int(time.time())}.mp4")
             )
         elif media_type == 'animation':
-            await application.bot.send_animation(
+            await bot.send_animation(
                 chat_id=CHANNEL_ID,
                 animation=InputFile(media_data, filename=f"meme_{int(time.time())}.gif")
             )
         else:
-            await application.bot.send_document(
+            await bot.send_document(
                 chat_id=CHANNEL_ID,
                 document=InputFile(media_data, filename=f"meme_{int(time.time())}.bin")
             )

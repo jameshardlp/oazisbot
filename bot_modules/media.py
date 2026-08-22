@@ -2,7 +2,7 @@
 import logging
 from typing import Optional, Union
 from telegram import InputFile, Message, PhotoSize, Video, Animation, Document
-from bot_modules.client import application
+from bot_modules.client import bot  # <-- ИСПРАВЛЕНО!
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +20,7 @@ async def send_media_message(
     """
     try:
         if media_type == 'photo':
-            message = await application.bot.send_photo(
+            message = await bot.send_photo(
                 chat_id=chat_id,
                 photo=media_file,
                 caption=caption,
@@ -28,7 +28,7 @@ async def send_media_message(
                 disable_notification=disable_notification,
             )
         elif media_type == 'video':
-            message = await application.bot.send_video(
+            message = await bot.send_video(
                 chat_id=chat_id,
                 video=media_file,
                 caption=caption,
@@ -36,7 +36,7 @@ async def send_media_message(
                 disable_notification=disable_notification,
             )
         elif media_type == 'animation':
-            message = await application.bot.send_animation(
+            message = await bot.send_animation(
                 chat_id=chat_id,
                 animation=media_file,
                 caption=caption,
@@ -44,7 +44,7 @@ async def send_media_message(
                 disable_notification=disable_notification,
             )
         elif media_type == 'document':
-            message = await application.bot.send_document(
+            message = await bot.send_document(
                 chat_id=chat_id,
                 document=media_file,
                 caption=caption,
