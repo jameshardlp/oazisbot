@@ -1,155 +1,193 @@
-"""Команда /broadcast: приём материала и выбор способа оплаты."""
+"""Обработчик команды /broadcast для создания рекламных постов."""
 import logging
-import time
+import asyncio
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ContextTypes, ConversationHandler, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 
-from aiogram.filters import Command
-from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
-
-from config import OWNER_ID
-from storage import load_users
-from payments.orders import broadcast_data, broadcast_prices
+from bot_modules.posting import handle_stars_payment_flow
+from config import CHANNEL_ID, OWNER_ID
 from bot_modules.client import dp
-from bot_modules.media import send_media_message
 
 logger = logging.getLogger(__name__)
 
-@dp.message(Command("broadcast"))
-async def broadcast_command(message: Message):
-    try:
-        if message.chat.type != "private":
-            await message.answer("ℹ️ Эта команда работает только в личных сообщениях с ботом.")
-            return
+# Состояния для ConversationHandler
+AWAITING_CONTENT = 1
+
+
+async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """
+    Обработчик команды /broadcast.
+    Запускает процесс создания рекламы — запрашивает контент у пользователя.
+    """
+    user_id = update.effective_user.id
+    
+    # Проверяем, что пользователь — владелец
+    if user_id != OWNER_ID:
+        await update.message.reply_text("❌ У вас нет прав на использование этой команды.")
+        return ConversationHandler.END
+    
+    await update.message.reply_text(
+        "📝 *Отправьте ваше рекламное сообщение*\n\n"
+        "Это может быть:\n"
+        "• Текст\n"
+        "• Фото с подписью\n"
+        "• Видео с подписью\n"
+        "• Документ (файл) с подписью\n\n"
+        "После отправки выберите способ оплаты.\n\n"
+        "❌ Для отмены отправьте /cancel",
+        parse_mode="Markdown"
+    )
+    
+    return AWAITING_CONTENT
+
+
+async def handle_broadcast_content(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """
+    Обработчик получения контента от пользователя.
+    Сохраняет сообщение и предлагает выбор оплаты.
+    """
+    user_id = update.effective_user.id
+    message = update.message
+    
+    # Проверяем права
+    if user_id != OWNER_ID:
+        await message.reply_text("❌ У вас нет прав.")
+        return ConversationHandler.END
+    
+    # Проверяем, что пользователь что-то отправил
+    if not message.text and not message.photo and not message.video and not message.document and not message.animation:
+        await message.reply_text(
+            "⚠️ Пожалуйста, отправьте текст, фото, видео или файл."
+        )
+        return AWAITING_CONTENT
+    
+    # Сохраняем ВСЁ сообщение (вместе с медиа)
+    context.user_data['broadcast_message'] = message
+    
+    # Показываем выбор способа оплаты
+    keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("💎 Оплатить звёздами", callback_data="pay_with_stars"),
+            InlineKeyboardButton("💳 Оплатить картой", callback_data="pay_with_card"),
+        ],
+        [InlineKeyboardButton("❌ Отменить", callback_data="cancel_broadcast")]
+    ])
+    
+    await message.reply_text(
+        "📢 *Ваше сообщение получено!*\n\n"
+        "Выберите способ оплаты:",
+        parse_mode="Markdown",
+        reply_markup=keyboard
+    )
+    
+    return ConversationHandler.END
+
+
+async def broadcast_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    Обработчик кнопок для оплаты рекламы.
+    """
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = query.from_user.id
+    data = query.data
+    broadcast_message = context.user_data.get('broadcast_message')
+    
+    # Проверяем права
+    if user_id != OWNER_ID:
+        await query.edit_message_text("❌ У вас нет прав.")
+        return
+    
+    if data == "cancel_broadcast":
+        await query.edit_message_text("❌ Реклама отменена.")
+        context.user_data.pop('broadcast_message', None)
+        return
+    
+    if not broadcast_message:
+        await query.edit_message_text(
+            "❌ Ошибка: сообщение не найдено. Попробуйте начать заново: /broadcast"
+        )
+        return
+    
+    if data == "pay_with_stars":
+        await query.edit_message_text("💫 *Запуск оплаты звёздами...*\n\nОжидайте...", parse_mode="Markdown")
         
-        user_id = message.from_user.id
-        chat_id = message.chat.id
-        
-        text = ""
-        has_media = False
-        media_type = None
-        media_file_id = None
-        
-        if message.text:
-            text = message.text.replace("/broadcast", "").strip()
-        elif message.caption:
-            text = message.caption.replace("/broadcast", "").strip()
-        
-        if message.photo:
-            has_media = True
-            media_type = "photo"
-            media_file_id = message.photo[-1].file_id
-            if not text and message.caption:
-                text = message.caption.replace("/broadcast", "").strip()
-        elif message.video:
-            has_media = True
-            media_type = "video"
-            media_file_id = message.video.file_id
-            if not text and message.caption:
-                text = message.caption.replace("/broadcast", "").strip()
-        elif message.document:
-            has_media = True
-            media_type = "document"
-            media_file_id = message.document.file_id
-            if not text and message.caption:
-                text = message.caption.replace("/broadcast", "").strip()
-        elif message.animation:
-            has_media = True
-            media_type = "animation"
-            media_file_id = message.animation.file_id
-            if not text and message.caption:
-                text = message.caption.replace("/broadcast", "").strip()
-        elif message.audio:
-            has_media = True
-            media_type = "audio"
-            media_file_id = message.audio.file_id
-            if not text and message.caption:
-                text = message.caption.replace("/broadcast", "").strip()
-        elif message.voice:
-            has_media = True
-            media_type = "voice"
-            media_file_id = message.voice.file_id
-            if not text and message.caption:
-                text = message.caption.replace("/broadcast", "").strip()
-        elif message.video_note:
-            has_media = True
-            media_type = "video_note"
-            media_file_id = message.video_note.file_id
-            text = ""
-        elif message.sticker:
-            has_media = True
-            media_type = "sticker"
-            media_file_id = message.sticker.file_id
-            text = ""
-        
-        if not text and not has_media:
-            stars_price = broadcast_prices.get("stars", 100)
-            rub_price = broadcast_prices.get("rub", 100)
-            await message.answer(
-                f"📢 **Платная рассылка**\n\n"
-                f"Отправьте сообщение с текстом или медиафайлом.\n\n"
-                f"💰 Цена: {stars_price} ⭐ или {rub_price} RUB\n"
-                f"💳 После оплаты сообщение уйдёт на модерацию.\n\n"
-                f"📌 Поддерживаются: фото, видео, GIF, аудио, документы, голосовые, стикеры.",
-                parse_mode="Markdown"
+        try:
+            # Запускаем процесс оплаты звёздами
+            success = await handle_stars_payment_flow(
+                bot=context.bot,
+                channel_id=CHANNEL_ID,
+                user_id=user_id,
+                broadcast_message=broadcast_message
             )
-            return
-        
-        stars_price = broadcast_prices.get("stars", 100)
-        rub_price = broadcast_prices.get("rub", 100)
-        order_id = f"broadcast_{user_id}_{int(time.time())}"
-        
-        broadcast_data[user_id] = {
-            'text': text,
-            'has_media': has_media,
-            'media_type': media_type,
-            'media_file_id': media_file_id,
-            'timestamp': time.time(),
-            'chat_id': chat_id,
-            'user_id': user_id,
-            'order_id': order_id,
-            'paid': False
-        }
-        
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text=f"⭐ Оплатить {stars_price} звёзд", callback_data=f"pay_stars_{order_id}")],
-            [InlineKeyboardButton(text=f"💳 Оплатить {rub_price} RUB", callback_data=f"pay_rub_{order_id}")],
-            [InlineKeyboardButton(text=f"🔗 Оплатить через AuraPay", callback_data=f"pay_aurapay_{order_id}")]
-        ])
-        
-        preview_text = f"📢 **Ваше сообщение для рассылки**\n\n"
-        if text:
-            preview_text += f"📝 {text[:200]}{'...' if len(text) > 200 else ''}\n\n"
-        else:
-            preview_text += f"📝 (без текста)\n\n"
-        
-        if has_media:
-            media_names = {
-                "photo": "📸 Фото",
-                "video": "🎬 Видео",
-                "document": "📄 Документ",
-                "animation": "🎥 GIF",
-                "audio": "🎵 Аудио",
-                "voice": "🎤 Голосовое",
-                "video_note": "🔄 Видео-кружок",
-                "sticker": "🎯 Стикер"
-            }
-            preview_text += f"📎 {media_names.get(media_type, 'Медиафайл')} (будет отправлено)\n\n"
-        
-        preview_text += f"💰 Цена: {stars_price} ⭐ или {rub_price} RUB\n"
-        preview_text += f"⏳ После оплаты сообщение уйдёт на модерацию."
-        
-        if has_media and media_file_id:
-            await send_media_message(message.chat.id, media_type, media_file_id,
-                                     caption=preview_text, reply_markup=keyboard,
-                                     parse_mode="Markdown")
-        else:
-            await message.answer(
-                preview_text,
-                reply_markup=keyboard,
-                parse_mode="Markdown"
+            
+            if success:
+                # Уведомляем пользователя
+                await query.edit_message_text(
+                    "✅ *Оплата прошла успешно!*\n\n"
+                    "Ваше сообщение отправлено на модерацию и будет опубликовано после проверки.",
+                    parse_mode="Markdown"
+                )
+                
+                # Очищаем сохранённое сообщение
+                context.user_data.pop('broadcast_message', None)
+                
+            else:
+                await query.edit_message_text(
+                    "❌ *Оплата не удалась.*\n\n"
+                    "Попробуйте снова или выберите другой способ оплаты: /broadcast",
+                    parse_mode="Markdown"
+                )
+                
+        except Exception as e:
+            logger.error(f"❌ Ошибка при оплате звёздами: {e}")
+            await query.edit_message_text(
+                "❌ Произошла ошибка при оплате. Попробуйте позже: /broadcast"
             )
-        
-        logger.info(f"📢 Рассылка создана для {user_id}, заказ {order_id}")
-        
-    except Exception as e:
-        logger.error(f"Ошибка в команде broadcast: {e}")
-        await message.answer("❌ Произошла ошибка. Попробуйте позже.")
+    
+    elif data == "pay_with_card":
+        # Обработка оплаты картой (существующая логика)
+        await query.edit_message_text(
+            "💳 *Оплата картой*\n\n"
+            "Этот способ оплаты временно недоступен. Пожалуйста, выберите оплату звёздами.",
+            parse_mode="Markdown"
+        )
+
+
+async def cancel_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Отмена создания рекламы."""
+    user_id = update.effective_user.id
+    
+    if user_id != OWNER_ID:
+        await update.message.reply_text("❌ У вас нет прав.")
+        return ConversationHandler.END
+    
+    await update.message.reply_text(
+        "❌ Создание рекламы отменено.",
+        parse_mode="Markdown"
+    )
+    context.user_data.pop('broadcast_message', None)
+    return ConversationHandler.END
+
+
+def get_broadcast_conversation_handler():
+    """Возвращает ConversationHandler для обработки /broadcast."""
+    return ConversationHandler(
+        entry_points=[CommandHandler("broadcast", broadcast_command)],
+        states={
+            AWAITING_CONTENT: [
+                MessageHandler(
+                    filters.TEXT | filters.PHOTO | filters.VIDEO | filters.Document.ALL | filters.ANIMATION,
+                    handle_broadcast_content
+                )
+            ],
+        },
+        fallbacks=[CommandHandler("cancel", cancel_broadcast)],
+        name="broadcast_conversation",
+        persistent=False,
+    )
+
+
+# Регистрируем обработчик для callback'ов (кнопок)
+dp.add_handler(CallbackQueryHandler(broadcast_callback, pattern="^(pay_with_stars|pay_with_card|cancel_broadcast|cancel_stars_payment)$"))
