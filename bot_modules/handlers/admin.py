@@ -3,7 +3,7 @@ import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, CommandHandler, CallbackQueryHandler
 from config import OWNER_ID, CHANNEL_ID
-from bot_modules.client import dp
+from bot_modules.client import application
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +43,6 @@ async def schedule_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         await update.message.reply_text("❌ У вас нет прав.")
         return
     
-    # Здесь можно добавить логику управления расписанием
     await update.message.reply_text(
         "📅 *Управление расписанием*\n\n"
         "Функция в разработке.",
@@ -53,6 +52,6 @@ async def schedule_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
 def register_admin_handlers():
     """Регистрирует административные команды."""
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(CommandHandler("stats", stats))
-    dp.add_handler(CommandHandler("schedule", schedule_command))
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("stats", stats))
+    application.add_handler(CommandHandler("schedule", schedule_command))
