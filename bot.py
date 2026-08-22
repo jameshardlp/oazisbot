@@ -78,6 +78,8 @@ async def main() -> None:
     asyncio.create_task(meme_scheduler())
 
     await bot.delete_webhook(drop_pending_updates=True)
+    
+    # Используем dp (который является Application) для start_polling
     await dp.start_polling(bot, allowed_updates=["message", "callback_query", "pre_checkout_query"])
 
 
