@@ -6,7 +6,7 @@ from telegram.ext import ContextTypes, ConversationHandler, CommandHandler, Mess
 
 from bot_modules.posting import handle_stars_payment_flow
 from config import CHANNEL_ID, OWNER_ID
-from bot_modules.client import dp
+from bot_modules.client import application
 
 logger = logging.getLogger(__name__)
 
@@ -190,4 +190,4 @@ def get_broadcast_conversation_handler():
 
 
 # Регистрируем обработчик для callback'ов (кнопок)
-dp.add_handler(CallbackQueryHandler(broadcast_callback, pattern="^(pay_with_stars|pay_with_card|cancel_broadcast|cancel_stars_payment)$"))
+application.add_handler(CallbackQueryHandler(broadcast_callback, pattern="^(pay_with_stars|pay_with_card|cancel_broadcast|cancel_stars_payment)$"))
