@@ -3,7 +3,6 @@ import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, CommandHandler, CallbackQueryHandler
 from config import OWNER_ID, CHANNEL_ID
-from bot_modules.client import application
 
 logger = logging.getLogger(__name__)
 
@@ -50,8 +49,8 @@ async def schedule_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     )
 
 
-def register_admin_handlers():
+def register_admin_handlers(app):
     """Регистрирует административные команды."""
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("stats", stats))
-    application.add_handler(CommandHandler("schedule", schedule_command))
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("stats", stats))
+    app.add_handler(CommandHandler("schedule", schedule_command))
