@@ -16,7 +16,7 @@ logging.basicConfig(
 )
 
 from config import FREEKASSA_SHOP_ID, FREEKASSA_SECRET1, SEND_DELAY
-from bot_modules.client import bot, dp
+from bot_modules.client import bot, application
 from bot_modules import handlers
 from bot_modules.scheduler import scheduler
 from bot_modules.meme_scheduler import meme_scheduler
@@ -64,12 +64,12 @@ async def main() -> None:
 
     # Добавляем обработчик для /broadcast (реклама)
     broadcast_handler = get_broadcast_conversation_handler()
-    dp.add_handler(broadcast_handler)
-    dp.add_handler(CallbackQueryHandler(broadcast_callback, pattern="^(pay_with_stars|pay_with_card|cancel_broadcast|cancel_stars_payment)$"))
+    application.add_handler(broadcast_handler)
+    application.add_handler(CallbackQueryHandler(broadcast_callback, pattern="^(pay_with_stars|pay_with_card|cancel_broadcast|cancel_stars_payment)$"))
 
     # Добавляем обработчик для /resend (ручная отправка в канал)
     resend_handler = get_resend_conversation_handler()
-    dp.add_handler(resend_handler)
+    application.add_handler(resend_handler)
 
     # Запускаем планировщик стримеров
     asyncio.create_task(scheduler())
@@ -79,8 +79,8 @@ async def main() -> None:
 
     await bot.delete_webhook(drop_pending_updates=True)
     
-    # Используем dp (который является Application) для start_polling
-    await dp.start_polling(bot, allowed_updates=["message", "callback_query", "pre_checkout_query"])
+    # Запускаем polling через application
+    await application.start_polling(bot, allowed_updates=["message", "callback_query", "pre_checkout_query"])
 
 
 if __name__ == "__main__":
