@@ -9,8 +9,9 @@ logger = logging.getLogger(__name__)
 # Создаём приложение
 application = Application.builder().token(BOT_TOKEN).build()
 
-# Dispatcher
-dp = application.dispatcher
+# В новой версии (v20+) dispatcher - это сам application
+# dp используется как алиас для application
+dp = application
 
 # Bot instance
 bot = application.bot
