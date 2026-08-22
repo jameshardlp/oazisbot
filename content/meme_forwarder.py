@@ -9,26 +9,26 @@ from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
 
-# Источники мемов (публичные каналы)
+# Источники мемов (публичные каналы) - ИСПРАВЛЕННЫЕ URL
 MEME_SOURCES = [
     {
         "name": "videos_dolboyoba",
-        "url": "https://t.me/videos_dolboyoba",
+        "url": "https://t.me/s/videos_dolboyoba",  # Добавлено /s/
         "chat_id": "@videos_dolboyoba"
     },
     {
         "name": "shitcollection",
-        "url": "https://t.me/shitcollection",
+        "url": "https://t.me/s/shitcollection",    # Добавлено /s/
         "chat_id": "@shitcollection"
     },
     {
         "name": "postleftism",
-        "url": "https://t.me/postleftism",
+        "url": "https://t.me/s/postleftism",        # Добавлено /s/
         "chat_id": "@postleftism"
     },
     {
         "name": "noviop",
-        "url": "https://t.me/noviop",
+        "url": "https://t.me/s/noviop",             # Добавлено /s/
         "chat_id": "@noviop"
     }
 ]
@@ -49,13 +49,16 @@ class MemeForwarder:
         self.cache_ttl = 3600
     
     def _fetch_page(self, url: str) -> Optional[BeautifulSoup]:
-        """Загружает страницу канала."""
+        """Загружает страницу канала с постами."""
         try:
+            logger.info(f"🌐 Загружаю: {url}")
             response = self.session.get(url, timeout=15)
             if response.status_code == 200:
                 # Сохраняем HTML для отладки
-                with open(f"debug_{url.split('/')[-1]}.html", "w", encoding="utf-8") as f:
-                    f.write(response.text)
+                filename = f"debug_{url.split('/')[-1]}.html"
+                with open(filename, "w", encoding="utf-8") as f:
+                    f.write(response.text[:50000])  # Только первые 50KB
+                logger.info(f"💾 HTML сохранён в {filename}")
                 return BeautifulSoup(response.text, 'html.parser')
             logger.warning(f"Ошибка загрузки {url}: {response.status_code}")
             return None
@@ -132,35 +135,20 @@ class MemeForwarder:
             return False
     
     def _find_all_posts(self, soup: BeautifulSoup) -> List:
-        """Находит все посты на странице (универсально)."""
+        """Находит все посты на странице."""
         posts = []
         
-        # Пробуем разные селекторы
-        selectors = [
-            '.tgme_widget_message',
-            '.tgme_widget_message_wrap',
-            '.tgme_widget_message_text',
-            '[data-post]',
-            '.message',
-            '.post',
-            '.media',
-        ]
+        # Основной селектор для публичных каналов
+        posts = soup.select('.tgme_widget_message')
         
-        for selector in selectors:
-            found = soup.select(selector)
-            if found:
-                posts.extend(found)
-                logger.debug(f"Найдено {len(found)} элементов по селектору: {selector}")
-                # Не прерываем, собираем все возможные
-        
-        # Если ничего не нашли — ищем любые div с атрибутами
+        # Если не найдено, пробуем альтернативные
         if not posts:
-            all_divs = soup.find_all('div')
-            for div in all_divs:
-                if div.get('data-post') or div.get('class') and any('message' in str(c) for c in div.get('class', [])):
-                    posts.append(div)
+            posts = soup.select('[data-post]')
         
-        # Убираем дубликаты по data-post или содержимому
+        if not posts:
+            posts = soup.select('.tgme_widget_message_wrap')
+        
+        # Убираем дубликаты по data-post
         seen = set()
         unique_posts = []
         for post in posts:
@@ -169,7 +157,7 @@ class MemeForwarder:
                 seen.add(post_id)
                 unique_posts.append(post)
             elif not post_id:
-                # Если нет ID, добавляем по содержимому (меньше дубликатов)
+                # Если нет ID, добавляем по содержимому
                 content = str(post)[:200]
                 if content not in seen:
                     seen.add(content)
@@ -185,17 +173,13 @@ class MemeForwarder:
             logger.warning(f"⚠️ Не удалось загрузить {source['name']}")
             return []
         
-        # Сохраняем HTML для отладки
-        with open(f"debug_{source['name']}_soup.html", "w", encoding="utf-8") as f:
-            f.write(str(soup)[:50000])
-        
         posts = self._find_all_posts(soup)
         
         if not posts:
             logger.warning(f"⚠️ Нет постов в {source['name']}")
             return []
         
-        logger.info(f"📊 Найдено {len(posts)} потенциальных постов в {source['name']}")
+        logger.info(f"📊 Найдено {len(posts)} постов в {source['name']}")
         
         result = []
         for post in posts[:limit]:
@@ -207,39 +191,9 @@ class MemeForwarder:
                         'message_id': int(post_id),
                         'source_name': source['name']
                     })
+                    logger.debug(f"  Найден пост с медиа: {post_id}")
         
         logger.info(f"✅ Найдено {len(result)} постов с медиа в {source['name']}")
-        
-        # Если не найдено, пробуем альтернативный подход
-        if not result:
-            logger.info(f"🔄 Пробую альтернативный парсинг для {source['name']}...")
-            # Ищем все ссылки на посты
-            links = soup.find_all('a', href=True)
-            for link in links:
-                href = link.get('href', '')
-                if 't.me' in href:
-                    match = re.search(r't\.me/[^/]+/(\d+)', href)
-                    if match:
-                        post_id = match.group(1)
-                        # Проверяем, есть ли рядом медиа
-                        parent = link.parent
-                        if parent and self._has_media(parent):
-                            result.append({
-                                'source_channel': source['chat_id'],
-                                'message_id': int(post_id),
-                                'source_name': source['name']
-                            })
-            
-            # Убираем дубликаты
-            seen = set()
-            unique_result = []
-            for item in result:
-                if item['message_id'] not in seen:
-                    seen.add(item['message_id'])
-                    unique_result.append(item)
-            result = unique_result
-            logger.info(f"✅ Альтернативный парсинг: найдено {len(result)} постов")
-        
         return result
     
     def get_all_posts(self, limit_per_channel: int = 100) -> List[Dict]:
@@ -261,7 +215,7 @@ class MemeForwarder:
         """Возвращает случайный пост для пересылки."""
         if time.time() - self.last_fetch_time > self.cache_ttl or not self.posts_cache:
             logger.info("🔄 Обновление кэша постов с мемами...")
-            self.posts_cache = self.get_all_posts(limit_per_channel=50)  # Берём 50 для скорости
+            self.posts_cache = self.get_all_posts(limit_per_channel=50)
             self.last_fetch_time = time.time()
             if len(self.sent_cache) > 500:
                 self.sent_cache = set()
