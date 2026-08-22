@@ -14,7 +14,7 @@ import requests
 from telegram import InputFile
 from config import CHANNEL_ID
 from content.meme_forwarder import get_random_meme_to_forward
-from telegram.client import bot
+from bot_modules.client import bot  # <-- ИСПРАВЛЕНО!
 
 logger = logging.getLogger(__name__)
 
