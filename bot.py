@@ -50,7 +50,7 @@ async def start_webhook_server(app: web.Application) -> None:
 async def main() -> None:
     """Основная асинхронная функция."""
     logger.info("=" * 60)
-    logger.info("🤖 БОТ ЗАПУЩЕН")
+    logger.info("🤖 БОТ ЗАПУЩЕН (версия 21.9)")
     logger.info("📸 Посты про стримеров (текст + ссылки на YouTube)")
     logger.info("🎬 Мемы из каналов (скачивание и отправка)")
     logger.info("📦 Источники мемов: videos_dolboyoba, shitcollection, postleftism, noviop")
@@ -79,10 +79,7 @@ async def main() -> None:
     asyncio.create_task(meme_scheduler())
 
     # Запускаем polling через Application
-    await application.initialize()
-    await application.start()
-    await application.updater.start_polling()
-    await application.idle()
+    await application.run_polling()
 
 
 if __name__ == "__main__":
