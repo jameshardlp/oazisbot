@@ -8,9 +8,9 @@ from aiogram.types import Message
 from config import OWNER_ID, CHANNEL_ID, UNLIMITED
 from storage import load_users, save_users, load_schedule, users, history
 from payments.orders import broadcast_prices
-from telegram.client import dp
-from telegram.posting import create_post_with_photo, send_to_all_users, get_channel_id
-from telegram.quota import can_use_photo, increment_photo_usage, format_limit
+from bot_modules.client import dp
+from bot_modules.posting import create_post_with_photo, send_to_all_users, get_channel_id
+from bot_modules.quota import can_use_photo, increment_photo_usage, format_limit
 
 logger = logging.getLogger(__name__)
 
