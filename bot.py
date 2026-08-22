@@ -18,10 +18,8 @@ from config import FREEKASSA_SHOP_ID, FREEKASSA_SECRET1, SEND_DELAY
 from telegram.client import bot, dp
 from telegram import handlers
 from telegram.scheduler import scheduler
+from telegram.meme_scheduler import meme_scheduler
 from payments.webhooks import freekassa_webhook, aurapay_webhook
-
-# Pyrogram больше не используется — удаляем импорт
-# from content.deepseek import init_pyrogram_client
 
 logger = logging.getLogger(__name__)
 
@@ -46,17 +44,20 @@ async def start_webhook_server(app: web.Application) -> None:
 async def main() -> None:
     logger.info("=" * 60)
     logger.info("🤖 БОТ ЗАПУЩЕН")
-    logger.info("📸 85% постов про стримеров, 15% про Азию")
-    logger.info(f"⏱️ Задержка между сообщениями: {SEND_DELAY} секунд")
-    logger.info("🔧 Используется веб-парсер для чтения стиля из канала (без Pyrogram)")
+    logger.info("📸 Генерация постов про стримеров")
+    logger.info("🎬 ДОПОЛНИТЕЛЬНО: автоматическая публикация мемов")
+    logger.info("📦 Источники мемов: videos_dolboyoba, shitcollection, postleftism, noviop")
+    logger.info(f"⏱️ Задержка между постами: {SEND_DELAY} секунд")
     logger.info("=" * 60)
-
-    # Pyrogram больше не инициализируем — используем веб-парсер
 
     if FREEKASSA_SHOP_ID and FREEKASSA_SECRET1:
         await start_webhook_server(web.Application())
 
+    # Запускаем старый планировщик (посты про стримеров)
     asyncio.create_task(scheduler())
+    
+    # Запускаем новый планировщик (мемы)
+    asyncio.create_task(meme_scheduler())
 
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot, allowed_updates=["message", "callback_query", "pre_checkout_query"])
