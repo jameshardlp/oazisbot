@@ -5,6 +5,8 @@ import os
 import sys
 
 from aiohttp import web
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes, ConversationHandler, MessageHandler, filters
 
 logging.basicConfig(
     level=logging.INFO,
