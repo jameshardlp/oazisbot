@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from config import CHANNEL_ID
 from content.deepseek import generate_caption_with_validation
 from content.media import get_streamer_media
-from bot_modules.client import bot
+from bot_modules.client import application
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +41,7 @@ async def publish_post():
         
         # Отправляем ТОЛЬКО ТЕКСТ
         if CHANNEL_ID:
-            await bot.send_message(
+            await application.bot.send_message(
                 chat_id=CHANNEL_ID,
                 text=caption
             )
