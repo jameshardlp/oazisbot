@@ -32,6 +32,9 @@ from bot_modules.handlers.resend import get_resend_conversation_handler
 # Импортируем административные обработчики
 from bot_modules.handlers.admin import register_admin_handlers
 
+# Импортируем базовые обработчики
+from bot_modules.handlers.basic import register_basic_handlers
+
 logger = logging.getLogger(__name__)
 
 
@@ -71,8 +74,9 @@ async def main() -> None:
     if FREEKASSA_SHOP_ID and FREEKASSA_SECRET1:
         await start_webhook_server(web_app)
 
-    # Регистрируем административные команды
+    # Регистрируем ВСЕ обработчики команд
     register_admin_handlers(application)
+    register_basic_handlers(application)
 
     # Добавляем обработчик для /broadcast (реклама)
     broadcast_handler = get_broadcast_conversation_handler()
