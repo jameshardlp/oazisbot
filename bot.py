@@ -16,7 +16,7 @@ logging.basicConfig(
 )
 
 from config import FREEKASSA_SHOP_ID, FREEKASSA_SECRET1, SEND_DELAY
-from bot_modules.client import bot, application
+from bot_modules.client import application
 from bot_modules import handlers
 from bot_modules.scheduler import scheduler
 from bot_modules.meme_scheduler import meme_scheduler
@@ -77,10 +77,10 @@ async def main() -> None:
     # Запускаем планировщик мемов
     asyncio.create_task(meme_scheduler())
 
-    await bot.delete_webhook(drop_pending_updates=True)
+    await application.bot.delete_webhook(drop_pending_updates=True)
     
     # Запускаем polling через application
-    await application.start_polling(bot, allowed_updates=["message", "callback_query", "pre_checkout_query"])
+    await application.start_polling(application.bot, allowed_updates=["message", "callback_query", "pre_checkout_query"])
 
 
 if __name__ == "__main__":
