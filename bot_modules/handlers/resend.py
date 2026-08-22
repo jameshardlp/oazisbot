@@ -7,7 +7,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler, CommandHandler, MessageHandler, filters
 
 from config import OWNER_ID, CHANNEL_ID
-from bot_modules.client import bot
+from bot_modules.client import application
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +73,7 @@ async def handle_content(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         
         # Отправляем в зависимости от типа
         if message.text:
-            await bot.send_message(
+            await application.bot.send_message(
                 chat_id=CHANNEL_ID,
                 text=message.text
             )
@@ -82,7 +82,7 @@ async def handle_content(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         elif message.photo:
             # Берём самое качественное фото
             photo = message.photo[-1]
-            await bot.send_photo(
+            await application.bot.send_photo(
                 chat_id=CHANNEL_ID,
                 photo=photo.file_id,
                 caption=caption
@@ -90,7 +90,7 @@ async def handle_content(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             logger.info(f"📤 Владелец отправил фото в канал")
             
         elif message.video:
-            await bot.send_video(
+            await application.bot.send_video(
                 chat_id=CHANNEL_ID,
                 video=message.video.file_id,
                 caption=caption
@@ -98,7 +98,7 @@ async def handle_content(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             logger.info(f"📤 Владелец отправил видео в канал")
             
         elif message.animation:
-            await bot.send_animation(
+            await application.bot.send_animation(
                 chat_id=CHANNEL_ID,
                 animation=message.animation.file_id,
                 caption=caption
@@ -106,7 +106,7 @@ async def handle_content(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             logger.info(f"📤 Владелец отправил GIF в канал")
             
         elif message.document:
-            await bot.send_document(
+            await application.bot.send_document(
                 chat_id=CHANNEL_ID,
                 document=message.document.file_id,
                 caption=caption
@@ -158,3 +158,7 @@ def get_resend_conversation_handler():
         name="resend_conversation",
         persistent=False,
     )
+
+
+# Регистрируем обработчик
+application.add_handler(CommandHandler("resend", resend_command))
