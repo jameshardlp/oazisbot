@@ -1,11 +1,11 @@
-# telegram/meme_scheduler.py
+"""Планировщик для публикации мемов (пересылка из каналов)."""
 import asyncio
 import logging
 import random
 from datetime import datetime, timedelta
 
 from config import CHANNEL_ID
-from content.meme_parser import get_random_meme
+from content.meme_forwarder import get_random_meme_to_forward
 from telegram.client import bot
 
 logger = logging.getLogger(__name__)
@@ -14,68 +14,39 @@ MIN_INTERVAL = 3600
 MAX_INTERVAL = 10800
 
 async def send_meme_to_channel() -> bool:
-    """Отправляет один мем в канал."""
+    """Пересылает мем в канал."""
     try:
-        meme = get_random_meme()
-        if not meme:
+        # Получаем данные для пересылки
+        meme_data = get_random_meme_to_forward()
+        if not meme_data:
             logger.warning("⚠️ Нет доступных мемов")
             return False
         
-        media_url = meme.get('media_url')
-        media_type = meme.get('media_type', 'photo')
+        source_channel = meme_data.get('source_channel')
+        message_id = meme_data.get('message_id')
         
-        if not media_url:
+        if not source_channel or not message_id:
             return False
         
-        logger.info(f"📤 Отправляю медиа (тип: {media_type})")
-        logger.info(f"📎 URL: {media_url[:80]}...")
+        logger.info(f"📤 Пересылаю мем из {source_channel} (ID: {message_id})")
         
-        # Отправляем в зависимости от типа
-        try:
-            if media_type == 'photo':
-                await bot.send_photo(
-                    chat_id=CHANNEL_ID,
-                    photo=media_url
-                )
-            elif media_type == 'video':
-                await bot.send_video(
-                    chat_id=CHANNEL_ID,
-                    video=media_url
-                )
-            elif media_type == 'animation':
-                await bot.send_animation(
-                    chat_id=CHANNEL_ID,
-                    animation=media_url
-                )
-            else:
-                # Пробуем отправить как файл
-                await bot.send_document(
-                    chat_id=CHANNEL_ID,
-                    document=media_url
-                )
-            
-            logger.info("✅ Медиа опубликовано!")
-            return True
-            
-        except Exception as e:
-            error_msg = str(e).lower()
-            if "failed to get http url content" in error_msg:
-                logger.warning(f"⚠️ URL недоступен: {media_url[:50]}...")
-                # Удаляем недоступный URL
-                from content.meme_parser import _meme_parser
-                if _meme_parser:
-                    _meme_parser.media_cache = [
-                        m for m in _meme_parser.media_cache 
-                        if m.get('media_url') != media_url
-                    ]
-                    logger.info("🗑️ Недоступный URL удалён из кэша")
-                return False
-            else:
-                logger.error(f"❌ Ошибка отправки: {e}")
-                return False
+        # Пересылаем сообщение в канал
+        # forward_message скрывает источник, если бот не администратор
+        await bot.forward_message(
+            chat_id=CHANNEL_ID,
+            from_chat_id=source_channel,
+            message_id=message_id
+        )
+        
+        logger.info("✅ Мем опубликован!")
+        return True
         
     except Exception as e:
-        logger.error(f"❌ Ошибка публикации: {e}")
+        error_msg = str(e).lower()
+        if "not found" in error_msg:
+            logger.warning("⚠️ Сообщение не найдено, возможно удалено")
+        else:
+            logger.error(f"❌ Ошибка пересылки: {e}")
         return False
 
 async def meme_scheduler():
@@ -100,9 +71,6 @@ async def meme_scheduler():
         minutes = (next_interval % 3600) // 60
         
         logger.info(f"⏳ Следующий мем через {hours}ч {minutes}м")
-        next_time = datetime.now() + timedelta(seconds=next_interval)
-        logger.info(f"📅 Ожидаемое время: {next_time.strftime('%H:%M:%S')}")
-        
         await asyncio.sleep(next_interval)
         
         success = await send_meme_to_channel()
