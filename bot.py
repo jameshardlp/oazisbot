@@ -6,7 +6,7 @@ import sys
 
 from aiohttp import web
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes, ConversationHandler, MessageHandler, filters
+from telegram.ext import CallbackQueryHandler, CommandHandler
 
 logging.basicConfig(
     level=logging.INFO,
@@ -14,17 +14,17 @@ logging.basicConfig(
 )
 
 from config import FREEKASSA_SHOP_ID, FREEKASSA_SECRET1, SEND_DELAY
-from telegram.client import bot, dp
-from telegram import handlers
-from telegram.scheduler import scheduler
-from telegram.meme_scheduler import meme_scheduler
+from bot_modules.client import bot, dp
+from bot_modules import handlers
+from bot_modules.scheduler import scheduler
+from bot_modules.meme_scheduler import meme_scheduler
 from payments.webhooks import freekassa_webhook, aurapay_webhook
 
 # Импортируем обработчик для /broadcast
-from telegram.handlers.broadcast import get_broadcast_conversation_handler, broadcast_callback
+from bot_modules.handlers.broadcast import get_broadcast_conversation_handler, broadcast_callback
 
 # Импортируем обработчик для /resend
-from telegram.handlers.resend import get_resend_conversation_handler
+from bot_modules.handlers.resend import get_resend_conversation_handler
 
 logger = logging.getLogger(__name__)
 
