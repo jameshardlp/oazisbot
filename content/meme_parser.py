@@ -43,6 +43,38 @@ class MemeParser:
         self.last_fetch_time = 0
         self.cache_ttl = 3600  # Обновлять раз в час
     
+    def _is_url_accessible(self, url: str) -> bool:
+        """Проверяет доступность URL без скачивания контента."""
+        if not url:
+            return False
+        try:
+            # Делаем HEAD запрос, чтобы проверить доступность
+            response = self.session.head(url, timeout=5, allow_redirects=True)
+            return response.status_code == 200
+        except Exception as e:
+            logger.debug(f"URL недоступен: {url[:50]}... - {e}")
+            return False
+    
+    def _is_valid_media_url(self, url: str) -> bool:
+        """Проверяет, что URL ведёт на медиа-файл."""
+        if not url:
+            return False
+        
+        # Проверяем расширения файлов
+        valid_extensions = ('.jpg', '.jpeg', '.png', '.gif', '.mp4', '.webm', '.webp')
+        if url.lower().endswith(valid_extensions):
+            return True
+        
+        # Проверяем, что это не ссылка на страницу Telegram
+        if 't.me' in url and '/file/' in url:
+            return True
+        
+        # Исключаем ссылки на страницы
+        if '/watch?' in url or '/embed/' in url:
+            return False
+        
+        return True
+    
     def _fetch_page(self, url: str) -> Optional[BeautifulSoup]:
         """Загружает страницу канала."""
         try:
@@ -103,6 +135,15 @@ class MemeParser:
             if not media_url or not media_type:
                 return None
             
+            # Проверяем, что это валидный медиа-URL
+            if not self._is_valid_media_url(media_url):
+                return None
+            
+            # Проверяем доступность URL
+            if not self._is_url_accessible(media_url):
+                logger.debug(f"URL недоступен: {media_url[:50]}...")
+                return None
+            
             return {
                 'media_url': media_url,
                 'media_type': media_type,
@@ -141,7 +182,7 @@ class MemeParser:
             try:
                 media = self.get_channel_media(source, limit_per_channel)
                 all_media.extend(media)
-                time.sleep(1)
+                time.sleep(1)  # Задержка между запросами
             except Exception as e:
                 logger.error(f"❌ Ошибка парсинга {source['name']}: {e}")
         
@@ -151,6 +192,7 @@ class MemeParser:
     
     def get_random_meme(self) -> Optional[Dict]:
         """Возвращает случайный мем из кэша или загружает новые."""
+        # Проверяем, нужно ли обновить кэш
         if time.time() - self.last_fetch_time > self.cache_ttl or not self.media_cache:
             logger.info("🔄 Обновление кэша мемов...")
             self.media_cache = self.get_all_media(limit_per_channel=100)
@@ -158,6 +200,7 @@ class MemeParser:
             if len(self.sent_cache) > 500:
                 self.sent_cache = set()
         
+        # Фильтруем уже отправленные
         available = [m for m in self.media_cache if m.get('post_id') not in self.sent_cache]
         
         if not available:
@@ -168,13 +211,26 @@ class MemeParser:
             available = [m for m in self.media_cache if m.get('post_id') not in self.sent_cache]
             
             if not available:
+                logger.warning("⚠️ Нет доступных мемов")
                 return None
         
-        chosen = random.choice(available)
-        if chosen.get('post_id'):
-            self.sent_cache.add(chosen['post_id'])
+        # Выбираем случайный мем
+        # Пробуем найти доступный URL, если первый недоступен
+        for _ in range(10):  # Максимум 10 попыток
+            chosen = random.choice(available)
+            if self._is_url_accessible(chosen.get('media_url', '')):
+                if chosen.get('post_id'):
+                    self.sent_cache.add(chosen['post_id'])
+                return chosen
+            else:
+                # Удаляем недоступный мем из кэша
+                self.media_cache = [m for m in self.media_cache if m.get('media_url') != chosen.get('media_url')]
+                available = [m for m in self.media_cache if m.get('post_id') not in self.sent_cache]
+                if not available:
+                    break
         
-        return chosen
+        logger.warning("⚠️ Не удалось найти доступный мем")
+        return None
 
 # Глобальный экземпляр
 _meme_parser = None
