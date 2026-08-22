@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from telegram.constants import ParseMode
-from bot_modules.client import bot
+from bot_modules.client import application
 
 logger = logging.getLogger(__name__)
 
@@ -41,35 +41,6 @@ async def create_stars_payment_post(bot: Bot, channel_id: int, user_id: int, bro
     except Exception as e:
         logger.error(f"❌ Ошибка создания поста для оплаты звездой: {e}")
         return None, None
-
-
-async def handle_stars_payment_flow(bot: Bot, channel_id: int, user_id: int, broadcast_message: Message) -> bool:
-    """Полный цикл оплаты звездой."""
-    logger.info(f"💫 Начинаем оплату звездой для пользователя {user_id}")
-    
-    # 1. Создаём пост на канале
-    post_id, _ = await create_stars_payment_post(bot, channel_id, user_id, broadcast_message)
-    if not post_id:
-        await bot.send_message(
-            chat_id=user_id,
-            text="❌ Не удалось создать пост для оплаты. Попробуйте позже."
-        )
-        return False
-    
-    # 2. Отправляем пользователю ссылку
-    await send_payment_request_to_user(bot, user_id, post_id, channel_id)
-    
-    # 3. Ожидаем оплату
-    success, _ = await wait_for_stars_payment(bot, channel_id, post_id, user_id, broadcast_message)
-    
-    if success:
-        # 4. Отправляем сообщение на модерацию
-        await send_to_moderation(user_id, broadcast_message)
-        logger.info(f"✅ Оплата звездой успешно завершена для {user_id}")
-        return True
-    else:
-        logger.warning(f"❌ Оплата звездой не удалась для {user_id}")
-        return False
 
 
 async def send_payment_request_to_user(bot: Bot, user_id: int, channel_post_id: int, channel_id: int) -> bool:
@@ -142,12 +113,43 @@ async def wait_for_stars_payment(bot: Bot, channel_id: int, post_id: int, user_i
     return False, None
 
 
+async def handle_stars_payment_flow(bot: Bot, channel_id: int, user_id: int, broadcast_message: Message) -> bool:
+    """Полный цикл оплаты звездой."""
+    logger.info(f"💫 Начинаем оплату звездой для пользователя {user_id}")
+    
+    # 1. Создаём пост на канале
+    post_id, _ = await create_stars_payment_post(bot, channel_id, user_id, broadcast_message)
+    if not post_id:
+        await bot.send_message(
+            chat_id=user_id,
+            text="❌ Не удалось создать пост для оплаты. Попробуйте позже."
+        )
+        return False
+    
+    # 2. Отправляем пользователю ссылку
+    await send_payment_request_to_user(bot, user_id, post_id, channel_id)
+    
+    # 3. Ожидаем оплату
+    success, _ = await wait_for_stars_payment(bot, channel_id, post_id, user_id, broadcast_message)
+    
+    if success:
+        # 4. Отправляем сообщение на модерацию
+        await send_to_moderation(user_id, broadcast_message)
+        logger.info(f"✅ Оплата звездой успешно завершена для {user_id}")
+        return True
+    else:
+        logger.warning(f"❌ Оплата звездой не удалась для {user_id}")
+        return False
+
+
 async def send_to_moderation(user_id: int, broadcast_message: Message) -> None:
     """Отправляет сообщение на модерацию владельцу."""
     try:
+        from config import OWNER_ID
+        
         await broadcast_message.forward(chat_id=OWNER_ID)
         
-        await bot.send_message(
+        await application.bot.send_message(
             chat_id=OWNER_ID,
             text=f"📢 *НОВАЯ РЕКЛАМА НА МОДЕРАЦИЮ*\n\n"
                  f"От пользователя: {user_id}\n"
