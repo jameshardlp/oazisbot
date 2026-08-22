@@ -3,7 +3,7 @@ import asyncio
 import logging
 from typing import Optional, Union
 from telegram import Message, PhotoSize, Video, Animation, Document, InputFile
-from bot_modules.client import bot  # <-- ИСПРАВЛЕНО!
+from bot_modules.client import application
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +28,7 @@ async def send_post_with_retry(
     for attempt in range(max_retries):
         try:
             if photo:
-                message = await bot.send_photo(
+                message = await application.bot.send_photo(
                     chat_id=chat_id,
                     photo=photo,
                     caption=caption or text,
@@ -37,7 +37,7 @@ async def send_post_with_retry(
                     reply_to_message_id=reply_to_message_id,
                 )
             elif video:
-                message = await bot.send_video(
+                message = await application.bot.send_video(
                     chat_id=chat_id,
                     video=video,
                     caption=caption or text,
@@ -46,7 +46,7 @@ async def send_post_with_retry(
                     reply_to_message_id=reply_to_message_id,
                 )
             elif animation:
-                message = await bot.send_animation(
+                message = await application.bot.send_animation(
                     chat_id=chat_id,
                     animation=animation,
                     caption=caption or text,
@@ -55,7 +55,7 @@ async def send_post_with_retry(
                     reply_to_message_id=reply_to_message_id,
                 )
             elif document:
-                message = await bot.send_document(
+                message = await application.bot.send_document(
                     chat_id=chat_id,
                     document=document,
                     caption=caption or text,
@@ -64,7 +64,7 @@ async def send_post_with_retry(
                     reply_to_message_id=reply_to_message_id,
                 )
             else:
-                message = await bot.send_message(
+                message = await application.bot.send_message(
                     chat_id=chat_id,
                     text=text or caption or "",
                     parse_mode=parse_mode,
