@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 import requests
+from telegram import InputFile
 from config import CHANNEL_ID
 from content.meme_forwarder import get_random_meme_to_forward
 from telegram.client import bot
@@ -78,7 +79,7 @@ def convert_video_with_ffmpeg(input_data: bytes, output_format: str = "mp4") -> 
             "-movflags", "+faststart",
             "-preset", preset,
             "-crf", crf_value,
-            "-vf", "scale=1280:-2",  # Ограничиваем ширину 1280px для экономии
+            "-vf", "scale=1280:-2",
             temp_output
         ]
         
@@ -111,7 +112,6 @@ def convert_video_with_ffmpeg(input_data: bytes, output_format: str = "mp4") -> 
         
     except subprocess.CalledProcessError as e:
         logger.error(f"FFmpeg ошибка: {e.stderr}")
-        # Пробуем очистить временные файлы
         try:
             if os.path.exists(temp_input):
                 os.remove(temp_input)
@@ -250,26 +250,26 @@ async def send_meme_to_channel() -> bool:
 
         logger.info(f"📤 Отправляю {media_type} ({len(media_data.getvalue()) // 1024}KB)")
 
-        # Отправляем в зависимости от типа
+        # Отправляем с использованием InputFile
         if media_type == 'photo':
             await bot.send_photo(
                 chat_id=CHANNEL_ID,
-                photo=media_data
+                photo=InputFile(media_data, filename=f"meme_{int(time.time())}.jpg")
             )
         elif media_type == 'video':
             await bot.send_video(
                 chat_id=CHANNEL_ID,
-                video=media_data
+                video=InputFile(media_data, filename=f"meme_{int(time.time())}.mp4")
             )
         elif media_type == 'animation':
             await bot.send_animation(
                 chat_id=CHANNEL_ID,
-                animation=media_data
+                animation=InputFile(media_data, filename=f"meme_{int(time.time())}.gif")
             )
         else:
             await bot.send_document(
                 chat_id=CHANNEL_ID,
-                document=media_data
+                document=InputFile(media_data, filename=f"meme_{int(time.time())}.bin")
             )
 
         logger.info(f"✅ Мем из {source_name} опубликован!")
@@ -287,7 +287,7 @@ async def meme_scheduler():
     logger.info(f"📡 Канал: {CHANNEL_ID}")
     logger.info(f"⏱️ Интервал: 1-3 часа")
     logger.info("📦 Источники: videos_dolboyoba, shitcollection, postleftism, noviop")
-    logger.info("🔄 Режим: скачивание и отправка с FFmpeg")
+    logger.info("🔄 Режим: скачивание и отправка с FFmpeg и InputFile")
     logger.info("=" * 60)
 
     first_delay = random.randint(30, 60)
