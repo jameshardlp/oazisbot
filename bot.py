@@ -34,6 +34,9 @@ from bot_modules.handlers.admin import register_admin_handlers
 # Импортируем базовые обработчики
 from bot_modules.handlers.basic import register_basic_handlers
 
+# Импортируем обработчик для /photo
+from bot_modules.handlers.photo import register_photo_handler
+
 logger = logging.getLogger(__name__)
 
 
@@ -66,6 +69,7 @@ async def main() -> None:
     logger.info("🎬 Мемы из каналов (скачивание и отправка)")
     logger.info("📦 Источники мемов: videos_dolboyoba, shitcollection, postleftism, noviop")
     logger.info("📤 Команда /resend — отправка контента в канал от имени бота")
+    logger.info("📸 Команда /photo — случайное фото стримера")
     logger.info("=" * 60)
 
     # Запускаем webhook сервер
@@ -83,6 +87,7 @@ async def main() -> None:
     # Регистрируем ВСЕ обработчики команд
     register_admin_handlers(application)
     register_basic_handlers(application)
+    register_photo_handler(application)  # <-- ВОССТАНОВЛЕНО
 
     # Добавляем обработчик для /broadcast (реклама)
     broadcast_handler = get_broadcast_conversation_handler()
