@@ -11,7 +11,4 @@ application = Application.builder().token(BOT_TOKEN).build()
 # Bot instance
 bot = application.bot
 
-# Для обратной совместимости — dp указывает на application
-dp = application
-
 logger.info("✅ Бот успешно инициализирован")
