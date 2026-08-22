@@ -8,14 +8,14 @@ from aiohttp import web
 
 # Импорты из установленной библиотеки python-telegram-bot
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import CallbackQueryHandler, CommandHandler
+from telegram.ext import CallbackQueryHandler, CommandHandler, Updater
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 
-from config import FREEKASSA_SHOP_ID, FREEKASSA_SECRET1, SEND_DELAY
+from config import FREEKASSA_SHOP_ID, FREEKASSA_SECRET1, SEND_DELAY, BOT_TOKEN
 from bot_modules.client import application
 from bot_modules import handlers
 from bot_modules.scheduler import scheduler
@@ -47,29 +47,31 @@ async def start_webhook_server(app: web.Application) -> None:
     logger.info(f"🌐 Webhook сервер на порту {port}")
 
 
-async def main() -> None:
+def start_bot() -> None:
+    """Запускает бота через Updater для старых версий."""
     logger.info("=" * 60)
-    logger.info("🤖 БОТ ЗАПУЩЕН")
+    logger.info("🤖 БОТ ЗАПУЩЕН (старая версия библиотеки)")
     logger.info("📸 Посты про стримеров (текст + ссылки на YouTube)")
     logger.info("🎬 Мемы из каналов (скачивание и отправка)")
     logger.info("📦 Источники мемов: videos_dolboyoba, shitcollection, postleftism, noviop")
     logger.info("📤 Команда /resend — отправка контента в канал от имени бота")
     logger.info("=" * 60)
 
-    if FREEKASSA_SHOP_ID and FREEKASSA_SECRET1:
-        await start_webhook_server(web.Application())
+    # Создаём Updater для старой версии
+    updater = Updater(token=BOT_TOKEN, use_context=True)
+    dp = updater.dispatcher
 
     # Регистрируем административные команды
     register_admin_handlers()
 
     # Добавляем обработчик для /broadcast (реклама)
     broadcast_handler = get_broadcast_conversation_handler()
-    application.add_handler(broadcast_handler)
-    application.add_handler(CallbackQueryHandler(broadcast_callback, pattern="^(pay_with_stars|pay_with_card|cancel_broadcast|cancel_stars_payment)$"))
+    dp.add_handler(broadcast_handler)
+    dp.add_handler(CallbackQueryHandler(broadcast_callback, pattern="^(pay_with_stars|pay_with_card|cancel_broadcast|cancel_stars_payment)$"))
 
     # Добавляем обработчик для /resend (ручная отправка в канал)
     resend_handler = get_resend_conversation_handler()
-    application.add_handler(resend_handler)
+    dp.add_handler(resend_handler)
 
     # Запускаем планировщик стримеров
     asyncio.create_task(scheduler())
@@ -77,12 +79,23 @@ async def main() -> None:
     # Запускаем планировщик мемов
     asyncio.create_task(meme_scheduler())
 
-    # Удаляем вебхук перед запуском polling
-    await application.bot.delete_webhook(drop_pending_updates=True)
+    # Запускаем polling через Updater
+    updater.start_polling()
+    updater.idle()
+
+
+async def main() -> None:
+    """Основная асинхронная функция."""
+    if FREEKASSA_SHOP_ID and FREEKASSA_SECRET1:
+        await start_webhook_server(web.Application())
     
-    # Запускаем polling
-    # Для старых версий python-telegram-bot (до v20) используем start_polling без аргументов
-    await application.start_polling()
+    # Запускаем бота синхронно в отдельном потоке
+    import threading
+    bot_thread = threading.Thread(target=start_bot)
+    bot_thread.start()
+    
+    # Ждём завершения
+    bot_thread.join()
 
 
 if __name__ == "__main__":
