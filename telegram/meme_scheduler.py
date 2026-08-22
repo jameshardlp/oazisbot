@@ -1,10 +1,12 @@
-"""Планировщик для публикации мемов (скачивание и отправка)."""
+"""Планировщик для публикации мемов (скачивание и отправка с FFmpeg)."""
 import asyncio
 import logging
 import random
 import io
 import time
 import re
+import os
+import subprocess
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -17,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 MIN_INTERVAL = 3600
 MAX_INTERVAL = 10800
+
 
 def download_media(url: str) -> Optional[io.BytesIO]:
     """Скачивает медиа по ссылке в память."""
@@ -39,6 +42,95 @@ def download_media(url: str) -> Optional[io.BytesIO]:
     except Exception as e:
         logger.error(f"Ошибка скачивания: {e}")
         return None
+
+
+def convert_video_with_ffmpeg(input_data: bytes, output_format: str = "mp4") -> Optional[io.BytesIO]:
+    """
+    Конвертирует видео через FFmpeg в формат H.264 для Telegram.
+    """
+    temp_input = "temp_input_video"
+    temp_output = f"temp_output_video.{output_format}"
+    
+    try:
+        # Сохраняем входные данные во временный файл
+        with open(temp_input, "wb") as f:
+            f.write(input_data)
+        
+        # Проверяем размер входного файла
+        input_size = os.path.getsize(temp_input)
+        logger.info(f"📊 Размер входного видео: {input_size // 1024}KB")
+        
+        # Если файл слишком большой (более 45MB), пробуем сжать сильнее
+        if input_size > 45 * 1024 * 1024:
+            logger.info("🔄 Видео большое, применяю сильное сжатие...")
+            crf_value = "28"
+            preset = "slow"
+        else:
+            crf_value = "23"
+            preset = "fast"
+        
+        # Команда FFmpeg: конвертирует в H.264 для Telegram
+        cmd = [
+            "ffmpeg",
+            "-i", temp_input,
+            "-c:v", "libx264",
+            "-c:a", "aac",
+            "-movflags", "+faststart",
+            "-preset", preset,
+            "-crf", crf_value,
+            "-vf", "scale=1280:-2",  # Ограничиваем ширину 1280px для экономии
+            temp_output
+        ]
+        
+        logger.info(f"🔄 Запуск FFmpeg с параметрами: {' '.join(cmd)}")
+        
+        # Запускаем FFmpeg
+        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+        
+        if result.returncode != 0:
+            logger.error(f"FFmpeg ошибка: {result.stderr}")
+            return None
+        
+        # Проверяем, создался ли выходной файл
+        if not os.path.exists(temp_output):
+            logger.error("FFmpeg не создал выходной файл")
+            return None
+        
+        # Читаем результат
+        with open(temp_output, "rb") as f:
+            result_data = f.read()
+        
+        output_size = len(result_data)
+        logger.info(f"✅ Видео сконвертировано! Размер: {output_size // 1024}KB")
+        
+        # Удаляем временные файлы
+        os.remove(temp_input)
+        os.remove(temp_output)
+        
+        return io.BytesIO(result_data)
+        
+    except subprocess.CalledProcessError as e:
+        logger.error(f"FFmpeg ошибка: {e.stderr}")
+        # Пробуем очистить временные файлы
+        try:
+            if os.path.exists(temp_input):
+                os.remove(temp_input)
+            if os.path.exists(temp_output):
+                os.remove(temp_output)
+        except:
+            pass
+        return None
+    except Exception as e:
+        logger.error(f"Ошибка FFmpeg: {e}")
+        try:
+            if os.path.exists(temp_input):
+                os.remove(temp_input)
+            if os.path.exists(temp_output):
+                os.remove(temp_output)
+        except:
+            pass
+        return None
+
 
 def get_direct_media_url(post_url: str) -> Optional[str]:
     """Пытается получить прямую ссылку на медиа из поста."""
@@ -102,6 +194,7 @@ def get_direct_media_url(post_url: str) -> Optional[str]:
         logger.error(f"Ошибка получения прямой ссылки: {e}")
         return None
 
+
 async def send_meme_to_channel() -> bool:
     """Скачивает и отправляет мем в канал."""
     try:
@@ -145,9 +238,19 @@ async def send_meme_to_channel() -> bool:
         else:
             media_type = 'document'
 
+        # Если это видео — конвертируем через FFmpeg
+        if media_type == 'video':
+            logger.info("🔄 Обнаружено видео, конвертирую через FFmpeg...")
+            converted_data = convert_video_with_ffmpeg(media_data.getvalue())
+            if converted_data:
+                media_data = converted_data
+                logger.info("✅ Видео успешно сконвертировано")
+            else:
+                logger.warning("⚠️ Не удалось сконвертировать видео, отправляю как есть")
+
         logger.info(f"📤 Отправляю {media_type} ({len(media_data.getvalue()) // 1024}KB)")
 
-        # Отправляем БЕЗ аргумента filename
+        # Отправляем в зависимости от типа
         if media_type == 'photo':
             await bot.send_photo(
                 chat_id=CHANNEL_ID,
@@ -176,6 +279,7 @@ async def send_meme_to_channel() -> bool:
         logger.error(f"❌ Ошибка: {e}")
         return False
 
+
 async def meme_scheduler():
     """Цикл планировщика мемов."""
     logger.info("=" * 60)
@@ -183,7 +287,7 @@ async def meme_scheduler():
     logger.info(f"📡 Канал: {CHANNEL_ID}")
     logger.info(f"⏱️ Интервал: 1-3 часа")
     logger.info("📦 Источники: videos_dolboyoba, shitcollection, postleftism, noviop")
-    logger.info("🔄 Режим: скачивание и отправка")
+    logger.info("🔄 Режим: скачивание и отправка с FFmpeg")
     logger.info("=" * 60)
 
     first_delay = random.randint(30, 60)
