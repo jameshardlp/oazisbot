@@ -7,7 +7,7 @@ from aiogram.types import Message
 from config import OWNER_ID, STARS_CHANNEL_ID
 from storage import load_schedule, save_schedule, schedule_data
 from payments.orders import broadcast_prices, save_broadcast_price
-from telegram.client import bot, dp
+from bot_modules.client import bot, dp
 
 logger = logging.getLogger(__name__)
 
