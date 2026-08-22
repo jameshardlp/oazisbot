@@ -27,9 +27,15 @@ STREAMER_SEARCH_NAMES = {
     'buster': 'Buster',
     'arrowwoods': 'Arrowwoods',
     'voodoosh': 'Voodoosh',
-    'lasqa': 'Lasqa',
     'evelone': 'Evelone',
     'nenormova': 'Nenormova',
+    't2x2': 'T2x2',
+    'dinablin': 'Dinablin',
+    'olyashaa': 'Olyashaa',
+    'guit88man': 'Guit88man',
+    'recrent': 'Recrent',
+    'koryamc': 'Koryamc',
+    'karmikkoala': 'Karmikkoala',
 }
 
 def search_yandex_images(query: str, limit: int = 10) -> List[str]:
