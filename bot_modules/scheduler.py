@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from config import CHANNEL_ID
 from content.deepseek import generate_caption_with_validation
 from content.media import get_streamer_media
-from telegram.client import bot
+from bot_modules.client import bot
 
 logger = logging.getLogger(__name__)
 
