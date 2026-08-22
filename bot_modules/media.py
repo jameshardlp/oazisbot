@@ -1,74 +1,63 @@
-"""Отправка медиа любых поддерживаемых типов + пометка карточки модерации."""
+"""Модуль для отправки медиа-сообщений."""
 import logging
-
-from aiogram.types import Message
-
-from telegram.client import bot
+from typing import Optional, Union
+from telegram import InputFile, Message, PhotoSize, Video, Animation, Document
+from bot_modules.client import bot  # <-- ИСПРАВЛЕНО!
 
 logger = logging.getLogger(__name__)
 
-# Медиа, которые Telegram отправляет без подписи
-CAPTIONLESS_MEDIA = ("sticker", "video_note")
 
-async def send_media_message(chat_id, media_type, file_id, caption=None, reply_markup=None, parse_mode=None):
-    """Единая отправка медиа любого поддерживаемого типа.
-
-    Для стикеров и видео-кружков подпись невозможна, поэтому текст уходит
-    отдельным сообщением. Раньше эти два типа в рассылке терялись: они
-    попадали в ветку else и заменялись обычным текстом.
+async def send_media_message(
+    chat_id: int,
+    media_type: str,
+    media_file: Union[str, bytes, PhotoSize, Video, Animation, Document, InputFile],
+    caption: Optional[str] = None,
+    parse_mode: Optional[str] = "Markdown",
+    disable_notification: bool = False,
+) -> Optional[Message]:
     """
-    senders = {
-        "photo": (bot.send_photo, "photo"),
-        "video": (bot.send_video, "video"),
-        "animation": (bot.send_animation, "animation"),
-        "audio": (bot.send_audio, "audio"),
-        "document": (bot.send_document, "document"),
-        "voice": (bot.send_voice, "voice"),
-        "sticker": (bot.send_sticker, "sticker"),
-        "video_note": (bot.send_video_note, "video_note"),
-    }
-
-    if not file_id or media_type not in senders:
-        if caption:
-            await bot.send_message(chat_id=chat_id, text=caption,
-                                   reply_markup=reply_markup, parse_mode=parse_mode)
-        return
-
-    sender, kwarg = senders[media_type]
-
-    if media_type in CAPTIONLESS_MEDIA:
-        await sender(chat_id=chat_id, **{kwarg: file_id})
-        if caption:
-            await bot.send_message(chat_id=chat_id, text=caption,
-                                   reply_markup=reply_markup, parse_mode=parse_mode)
-        elif reply_markup:
-            await bot.send_message(chat_id=chat_id, text="⬆️ Медиафайл",
-                                   reply_markup=reply_markup)
-        return
-
-    kwargs = {
-        "chat_id": chat_id,
-        kwarg: file_id,
-        "caption": caption or None,
-        "reply_markup": reply_markup,
-        "parse_mode": parse_mode,
-    }
-    # Удаляем None значения, чтобы не передавать лишние параметры
-    kwargs = {k: v for k, v in kwargs.items() if v is not None}
-    await sender(**kwargs)
-
-async def mark_moderation_card(message: Message, verdict: str):
-    """Дописывает вердикт в карточку модерации и убирает кнопки.
-
-    Карточка может быть и текстом, и медиа с подписью — у медиа message.text
-    равен None, поэтому edit_text на нём падал и рассылка не публиковалась.
+    Отправляет медиа-сообщение в зависимости от типа.
     """
     try:
-        if message.text is not None:
-            await message.edit_text(message.text + verdict, reply_markup=None)
-        elif message.caption is not None:
-            await message.edit_caption(caption=message.caption + verdict, reply_markup=None)
+        if media_type == 'photo':
+            message = await bot.send_photo(
+                chat_id=chat_id,
+                photo=media_file,
+                caption=caption,
+                parse_mode=parse_mode,
+                disable_notification=disable_notification,
+            )
+        elif media_type == 'video':
+            message = await bot.send_video(
+                chat_id=chat_id,
+                video=media_file,
+                caption=caption,
+                parse_mode=parse_mode,
+                disable_notification=disable_notification,
+            )
+        elif media_type == 'animation':
+            message = await bot.send_animation(
+                chat_id=chat_id,
+                animation=media_file,
+                caption=caption,
+                parse_mode=parse_mode,
+                disable_notification=disable_notification,
+            )
+        elif media_type == 'document':
+            message = await bot.send_document(
+                chat_id=chat_id,
+                document=media_file,
+                caption=caption,
+                parse_mode=parse_mode,
+                disable_notification=disable_notification,
+            )
         else:
-            await message.edit_reply_markup(reply_markup=None)
+            logger.warning(f"⚠️ Неизвестный тип медиа: {media_type}")
+            return None
+        
+        logger.info(f"✅ Медиа отправлено в чат {chat_id}")
+        return message
+        
     except Exception as e:
-        logger.error(f"Не удалось обновить карточку модерации: {e}")
+        logger.error(f"❌ Ошибка отправки медиа: {e}")
+        return None
