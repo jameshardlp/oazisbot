@@ -5,6 +5,8 @@ import os
 import sys
 
 from aiohttp import web
+
+# Импорты из установленной библиотеки python-telegram-bot
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CallbackQueryHandler, CommandHandler
 
@@ -25,6 +27,9 @@ from bot_modules.handlers.broadcast import get_broadcast_conversation_handler, b
 
 # Импортируем обработчик для /resend
 from bot_modules.handlers.resend import get_resend_conversation_handler
+
+# Импортируем административные обработчики
+from bot_modules.handlers.admin import register_admin_handlers
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +58,9 @@ async def main() -> None:
 
     if FREEKASSA_SHOP_ID and FREEKASSA_SECRET1:
         await start_webhook_server(web.Application())
+
+    # Регистрируем административные команды
+    register_admin_handlers()
 
     # Добавляем обработчик для /broadcast (реклама)
     broadcast_handler = get_broadcast_conversation_handler()
