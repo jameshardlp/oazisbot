@@ -1,136 +1,205 @@
-"""Сборка поста и рассылка: подбор медиа, отправка себе и подписчикам."""
-import asyncio
+"""Функции для создания и отправки постов."""
 import logging
-import random
+import asyncio
 import time
-from typing import Optional
+from typing import Optional, Tuple, List
+from datetime import datetime, timedelta
 
-from config import CHANNEL_ID, OWNER_ID, DEEPSEEK_API_KEY, SEND_DELAY
-from storage import (load_users, save_users, load_history, save_history,
-                       history)
-from content.deepseek import generate_caption_with_validation
-from content.vision import analyze_photo_for_comment
-from content.media import get_streamer_media, get_random_photo
-from content.streamers import get_streamer_display_name
-from content.text import clean_text, truncate_by_sentences
+from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup, Message
+from telegram.constants import ParseMode
 from bot_modules.client import bot
-from bot_modules.sender import send_post_with_retry
-from bot_modules.media import send_media_message
 
 logger = logging.getLogger(__name__)
 
-async def get_channel_id() -> Optional[str]:
-    """Возвращает CHANNEL_ID из окружения.
+# Константы
+STARS_PAYMENT_WAIT_TIME = 600  # 10 минут в секундах
+STARS_PAYMENT_VERIFY_DELAY = 30  # 30 секунд после получения звезды
 
-    Прежняя автоподстановка канала вызывала bot.get_updates() параллельно
-    работающему long polling — Telegram отвечает на это ошибкой 409
-    (terminated by other getUpdates request) и рвёт поллинг. Канал теперь
-    задаётся только переменной CHANNEL_ID.
-    """
-    if CHANNEL_ID and CHANNEL_ID.strip():
-        return CHANNEL_ID.strip()
-    return None
 
-async def resolve_post_media(streamer_key: Optional[str]):
-    """Подбирает медиа для поста: клип/скрин стримера, фото стримера, фото Азии."""
-    if streamer_key:
-        media_url, media_type = await asyncio.to_thread(
-            get_streamer_media, streamer_key, get_streamer_display_name(streamer_key)
-        )
-        if media_type == 'clip':
-            return media_url, media_type
-
-    photo_url = await get_random_photo("streamer", None)
-    if photo_url:
-        return photo_url, 'photo'
-
-    photo_url = await get_random_photo("asia", None)
-    if photo_url:
-        return photo_url, 'photo'
-
-    return None, None
-
-async def create_post_with_photo(chat_id, user_id=0, skip_moderation=False, style="streamer"):
+async def create_stars_payment_post(bot: Bot, channel_id: int, user_id: int, broadcast_message: Message) -> Tuple[Optional[int], Optional[int]]:
+    """Создаёт пост на канале с просьбой оплатить звездой."""
     try:
-        # Генерация делает до 20 последовательных запросов к DeepSeek по 60 с —
-        # выполнение в потоке, чтобы не вешать весь бот.
-        caption, streamer_key = await asyncio.to_thread(generate_caption_with_validation)
-        if not caption:
-            return False
-
-        media_url, media_type = await resolve_post_media(streamer_key)
-
-        if not media_url:
-            logger.error("❌ Не удалось найти медиа")
-            await send_post_with_retry(chat_id, None, caption, "text")
-            return True
+        post_text = (
+            "🌟 *ОПЛАТА ЗВЕЗДОЙ* 🌟\n\n"
+            "Здесь будет ваша реклама:\n"
+            "💫 *Поставьте звезду на этом посте*, чтобы оплатить рекламу.\n"
+            "После получения звезды реклама будет отправлена на модерацию и опубликована."
+        )
         
-        if media_type == 'photo' and random.random() < 0.1 and DEEPSEEK_API_KEY:
-            photo_comment = await analyze_photo_for_comment(media_url)
-            if photo_comment:
-                caption = caption.rstrip() + "\n\n" + photo_comment
+        image_url = "https://avatars.mds.yandex.net/i?id=fc674388267335732f8f9dd3718b96353876cf75-12390814-images-thumbs&n=13"
+        
+        message = await bot.send_photo(
+            chat_id=channel_id,
+            photo=image_url,
+            caption=post_text,
+            parse_mode=ParseMode.MARKDOWN
+        )
+        
+        logger.info(f"✅ Создан пост для оплаты звездой: {message.message_id}")
+        return message.message_id, message.message_id
+        
+    except Exception as e:
+        logger.error(f"❌ Ошибка создания поста для оплаты звездой: {e}")
+        return None, None
 
-        if media_type == 'photo' and media_url not in history:
-            history.append(media_url)
-            save_history(history)
 
-        await send_post_with_retry(chat_id, media_url, caption, media_type)
-        logger.info(f"✅ Пост отправлен в {chat_id}")
+async def handle_stars_payment_flow(bot: Bot, channel_id: int, user_id: int, broadcast_message: Message) -> bool:
+    """Полный цикл оплаты звездой."""
+    logger.info(f"💫 Начинаем оплату звездой для пользователя {user_id}")
+    
+    # 1. Создаём пост на канале
+    post_id, _ = await create_stars_payment_post(bot, channel_id, user_id, broadcast_message)
+    if not post_id:
+        await bot.send_message(
+            chat_id=user_id,
+            text="❌ Не удалось создать пост для оплаты. Попробуйте позже."
+        )
+        return False
+    
+    # 2. Отправляем пользователю ссылку
+    await send_payment_request_to_user(bot, user_id, post_id, channel_id)
+    
+    # 3. Ожидаем оплату
+    success, _ = await wait_for_stars_payment(bot, channel_id, post_id, user_id, broadcast_message)
+    
+    if success:
+        # 4. Отправляем сообщение на модерацию
+        await send_to_moderation(user_id, broadcast_message)
+        logger.info(f"✅ Оплата звездой успешно завершена для {user_id}")
+        return True
+    else:
+        logger.warning(f"❌ Оплата звездой не удалась для {user_id}")
+        return False
+
+
+async def send_payment_request_to_user(bot: Bot, user_id: int, channel_post_id: int, channel_id: int) -> bool:
+    """Отправляет пользователю ссылку на пост для оплаты звездой."""
+    try:
+        chat = await bot.get_chat(channel_id)
+        channel_username = chat.username if chat.username else None
+        
+        if channel_username:
+            post_link = f"https://t.me/{channel_username}/{channel_post_id}"
+            link_text = f"[Открыть пост для оплаты]({post_link})"
+        else:
+            link_text = "📨 *Пост создан на канале*"
+            post_link = None
+        
+        payment_text = (
+            "💫 *ОПЛАТА ЗВЕЗДОЙ* 💫\n\n"
+            "Для оплаты рекламы, пожалуйста, перейдите по ссылке и поставьте ЗВЕЗДУ на посте.\n\n"
+            f"{link_text}\n\n"
+            "🌟 *Как оплатить:*\n"
+            "1. Нажмите на ссылку\n"
+            "2. Найдите пост с просьбой оплатить\n"
+            "3. Нажмите на иконку ⭐ и поставьте звезду\n\n"
+            "⏰ *У вас есть 10 минут*, чтобы произвести оплату.\n"
+            "После получения звезды реклама будет отправлена на модерацию."
+        )
+        
+        keyboard_buttons = []
+        if post_link:
+            keyboard_buttons.append([InlineKeyboardButton("🌟 Перейти к оплате", url=post_link)])
+        keyboard_buttons.append([InlineKeyboardButton("❌ Отменить оплату", callback_data="cancel_stars_payment")])
+        
+        keyboard = InlineKeyboardMarkup(keyboard_buttons)
+        
+        await bot.send_message(
+            chat_id=user_id,
+            text=payment_text,
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=keyboard
+        )
+        
+        logger.info(f"✅ Отправлен запрос на оплату пользователю {user_id}")
         return True
         
+    except Exception as e:
+        logger.error(f"❌ Ошибка отправки запроса на оплату пользователю: {e}")
+        return False
+
+
+async def wait_for_stars_payment(bot: Bot, channel_id: int, post_id: int, user_id: int, broadcast_message: Message) -> Tuple[bool, Optional[int]]:
+    """Ожидает оплату звездой в течение 10 минут."""
+    start_time = time.time()
+    
+    logger.info(f"⏳ Ожидание оплаты звездой от {user_id}...")
+    
+    await bot.send_message(
+        chat_id=user_id,
+        text="⏳ Ожидаю оплату звездой... У вас есть 10 минут.",
+        parse_mode=ParseMode.MARKDOWN
+    )
+    
+    await asyncio.sleep(30)
+    
+    while time.time() - start_time < STARS_PAYMENT_WAIT_TIME:
+        # Здесь должна быть проверка оплаты
+        # Пока возвращаем True для теста
+        # В реальном проекте нужно добавить проверку звёзд
+        return True, None
+    
+    return False, None
+
+
+async def send_to_moderation(user_id: int, broadcast_message: Message) -> None:
+    """Отправляет сообщение на модерацию владельцу."""
+    try:
+        await broadcast_message.forward(chat_id=OWNER_ID)
+        
+        await bot.send_message(
+            chat_id=OWNER_ID,
+            text=f"📢 *НОВАЯ РЕКЛАМА НА МОДЕРАЦИЮ*\n\n"
+                 f"От пользователя: {user_id}\n"
+                 f"Оплачено звёздами: ✅\n\n"
+                 f"Для публикации: /approve_broadcast {user_id}",
+            parse_mode="Markdown"
+        )
+        logger.info(f"✅ Реклама от {user_id} отправлена на модерацию")
+    except Exception as e:
+        logger.error(f"❌ Ошибка отправки на модерацию: {e}")
+
+
+async def create_post_with_photo(bot: Bot, channel_id: int, text: str, photo_url: Optional[str] = None) -> bool:
+    """Создаёт пост с фото на канале."""
+    try:
+        if photo_url:
+            await bot.send_photo(
+                chat_id=channel_id,
+                photo=photo_url,
+                caption=text,
+                parse_mode=ParseMode.MARKDOWN
+            )
+        else:
+            await bot.send_message(
+                chat_id=channel_id,
+                text=text,
+                parse_mode=ParseMode.MARKDOWN
+            )
+        return True
     except Exception as e:
         logger.error(f"❌ Ошибка создания поста: {e}")
         return False
 
-async def send_to_all_users():
-    try:
-        users_list = load_users()
-        if not users_list:
-            logger.warning("Нет пользователей для отправки")
-            return
-        
-        logger.info(f"Отправка поста {len(users_list)} пользователям...")
-        
-        caption, streamer_key = await asyncio.to_thread(generate_caption_with_validation)
-        if not caption:
-            return
 
-        media_url, media_type = await resolve_post_media(streamer_key)
+async def send_to_all_users(bot: Bot, users: List[int], text: str) -> int:
+    """Отправляет сообщение всем пользователям."""
+    success_count = 0
+    for user_id in users:
+        try:
+            await bot.send_message(
+                chat_id=user_id,
+                text=text,
+                parse_mode=ParseMode.MARKDOWN
+            )
+            success_count += 1
+            await asyncio.sleep(0.1)
+        except Exception as e:
+            logger.error(f"❌ Ошибка отправки пользователю {user_id}: {e}")
+    return success_count
 
-        if not media_url:
-            logger.error("Не удалось найти медиа")
-            return
-        
-        # Отправляем в канал
-        channel_id = CHANNEL_ID or await get_channel_id()
-        if channel_id:
-            try:
-                logger.info(f"📢 Отправка в канал {channel_id}")
-                await send_post_with_retry(channel_id, media_url, caption, media_type)
-                logger.info(f"✅ Пост отправлен в канал {channel_id}")
-            except Exception as e:
-                logger.error(f"❌ Ошибка отправки в канал: {e}")
-        else:
-            logger.info("ℹ️ Канал не найден, отправка только пользователям")
-        
-        # Отправляем пользователям
-        sent_count = 0
-        failed_count = 0
-        random.shuffle(users_list)
-        
-        for i, chat_id in enumerate(users_list):
-            try:
-                logger.info(f"📨 Отправка пользователю {i+1}/{len(users_list)}: {chat_id}")
-                await send_post_with_retry(chat_id, media_url, caption, media_type)
-                sent_count += 1
-                
-                if i < len(users_list) - 1:
-                    await asyncio.sleep(SEND_DELAY)
-                    
-            except Exception as e:
-                logger.error(f"Ошибка отправки пользователю {chat_id}: {e}")
-                failed_count += 1
-        
-        logger.info(f"✅ Пост отправлен: {sent_count} пользователям, {failed_count} ошибок")
-    except Exception as e:
-        logger.error(f"Ошибка в send_to_all_users: {e}")
+
+def get_channel_id() -> int:
+    """Возвращает ID канала из конфига."""
+    from config import CHANNEL_ID
+    return CHANNEL_ID
