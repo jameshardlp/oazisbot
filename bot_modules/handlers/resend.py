@@ -2,10 +2,10 @@
 import logging
 from typing import Optional
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ContextTypes, ConversationHandler, CommandHandler, MessageHandler, filters
+from bot_modules import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from bot_modules.ext import ContextTypes, ConversationHandler, CommandHandler, MessageHandler, filters
 from config import OWNER_ID, CHANNEL_ID
-from telegram.client import bot
+from bot_modules.client import bot
 
 logger = logging.getLogger(__name__)
 
