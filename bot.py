@@ -3,6 +3,7 @@ import asyncio
 import logging
 import os
 import sys
+import signal
 
 from aiohttp import web
 
@@ -47,18 +48,28 @@ async def start_webhook_server(app: web.Application) -> None:
     logger.info(f"🌐 Webhook сервер на порту {port}")
 
 
+async def shutdown_tasks() -> None:
+    """Корректно завершает задачи."""
+    tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
+    for task in tasks:
+        task.cancel()
+    await asyncio.gather(*tasks, return_exceptions=True)
+
+
 async def main() -> None:
     """Основная асинхронная функция."""
     logger.info("=" * 60)
-    logger.info("🤖 БОТ ЗАПУЩЕН (версия 21.9)")
+    logger.info("🤖 БОТ ЗАПУЩЕН")
     logger.info("📸 Посты про стримеров (текст + ссылки на YouTube)")
     logger.info("🎬 Мемы из каналов (скачивание и отправка)")
     logger.info("📦 Источники мемов: videos_dolboyoba, shitcollection, postleftism, noviop")
     logger.info("📤 Команда /resend — отправка контента в канал от имени бота")
     logger.info("=" * 60)
 
+    # Запускаем webhook сервер
+    web_app = web.Application()
     if FREEKASSA_SHOP_ID and FREEKASSA_SECRET1:
-        await start_webhook_server(web.Application())
+        await start_webhook_server(web_app)
 
     # Регистрируем административные команды
     register_admin_handlers(application)
@@ -72,21 +83,44 @@ async def main() -> None:
     resend_handler = get_resend_conversation_handler()
     application.add_handler(resend_handler)
 
-    # Запускаем планировщик стримеров
-    asyncio.create_task(scheduler())
+    # Запускаем планировщик стримеров как фоновую задачу
+    scheduler_task = asyncio.create_task(scheduler())
     
-    # Запускаем планировщик мемов
-    asyncio.create_task(meme_scheduler())
+    # Запускаем планировщик мемов как фоновую задачу
+    meme_scheduler_task = asyncio.create_task(meme_scheduler())
 
-    # Запускаем polling через Application
-    await application.run_polling()
+    try:
+        # Запускаем бота
+        await application.initialize()
+        await application.start()
+        await application.updater.start_polling()
+        logger.info("✅ Бот запущен и готов к работе")
+        
+        # Ждём сигнала остановки
+        await asyncio.Event().wait()
+        
+    except (KeyboardInterrupt, asyncio.CancelledError):
+        logger.info("🛑 Получен сигнал остановки")
+    finally:
+        # Корректно завершаем задачи
+        logger.info("🔄 Завершаем работу...")
+        await application.updater.stop()
+        await application.stop()
+        await application.shutdown()
+        
+        # Отменяем фоновые задачи
+        scheduler_task.cancel()
+        meme_scheduler_task.cancel()
+        
+        await shutdown_tasks()
+        logger.info("✅ Бот остановлен")
 
 
 if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        logger.info("🛑 Бот остановлен")
+        logger.info("🛑 Бот остановлен пользователем")
     except Exception as e:
         logger.error(f"❌ Фатальная ошибка: {e}")
         sys.exit(1)
