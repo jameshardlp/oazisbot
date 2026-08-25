@@ -1,92 +1,93 @@
-"""Парсер ID постов с мемами для пересылки."""
+"""Парсер ID постов с мемами для пересылки.
+
+Список каналов-источников живёт в settings.py и правится командой /sources,
+поэтому читается на каждый обход, а не фиксируется константой при импорте.
+"""
 import logging
 import random
 import time
-import re
 from typing import List, Dict, Optional
-import requests
+
 from bs4 import BeautifulSoup
+
+import settings
+from content import net
 
 logger = logging.getLogger(__name__)
 
-MEME_SOURCES = [
-    {
-        "name": "videos_dolboyoba",
-        "url": "https://t.me/s/videos_dolboyoba",
-        "chat_id": "@videos_dolboyoba"
-    },
-    {
-        "name": "shitcollection",
-        "url": "https://t.me/s/shitcollection",
-        "chat_id": "@shitcollection"
-    },
-    {
-        "name": "postleftism",
-        "url": "https://t.me/s/postleftism",
-        "chat_id": "@postleftism"
-    },
-    {
-        "name": "noviop",
-        "url": "https://t.me/s/noviop",
-        "chat_id": "@noviop"
-    }
-]
+
+def get_meme_sources() -> List[Dict]:
+    """Каналы-источники в том виде, в каком их ждёт get_channel_posts."""
+    return [
+        {
+            "name": name,
+            "url": f"https://t.me/s/{name}",
+            "chat_id": f"@{name}",
+        }
+        for name in settings.get_meme_channels()
+    ]
+
 
 class MemeForwarder:
     def __init__(self):
-        self.session = requests.Session()
-        self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        })
+        # Своя сессия (t.me ставит свои cookies), заголовки и ретраи — общие
+        self.session = net.new_session()
         self.sent_cache = set()
         self.posts_cache = []
         self.last_fetch_time = 0
         self.cache_ttl = 3600
-    
+
     def _fetch_page(self, url: str) -> Optional[BeautifulSoup]:
-        try:
-            response = self.session.get(url, timeout=15)
-            if response.status_code == 200:
-                return BeautifulSoup(response.text, 'html.parser')
+        response = net.request(
+            "GET", url, session=self.session, label=f"мемы {url}",
+        )
+        if response is None or response.status_code != 200:
+            if response is not None:
+                logger.warning(f"⚠️ {url}: HTTP {response.status_code}")
             return None
-        except Exception as e:
-            logger.error(f"Ошибка загрузки {url}: {e}")
-            return None
-    
+        return BeautifulSoup(response.text, 'html.parser')
+
     def get_channel_posts(self, source: Dict, limit: int = 100) -> List[Dict]:
         """Получает реальные ID постов с медиа из канала."""
         logger.info(f"📥 Парсинг {source['name']}...")
         soup = self._fetch_page(source['url'])
         if not soup:
             return []
-        
+        return self._extract_posts(soup, source, limit)
+
+    def _extract_posts(self, soup: BeautifulSoup, source: Dict, limit: int) -> List[Dict]:
+        """Разбор уже загруженной страницы. Отделён от загрузки, чтобы check_channel
+        мог различить «канал недоступен» и «в канале нет медиа»."""
         # Ищем все посты
         posts = soup.select('.tgme_widget_message')
         if not posts:
-            logger.warning(f"⚠️ Нет постов в {source['name']}")
+            net.log_layout_changed(
+                f"мемы {source['name']}", source['url'],
+                "нет ни одного .tgme_widget_message",
+            )
             return []
-        
+
         logger.info(f"📊 Найдено {len(posts)} постов в {source['name']}")
-        
+
         result = []
         for post in posts[:limit]:
             # Проверяем наличие медиа
             has_media = post.select_one('.tgme_widget_message_photo_wrap, .tgme_widget_message_video_wrap, .tgme_widget_message_document_wrap')
             if not has_media:
                 continue
-            
+
             # Получаем РЕАЛЬНЫЙ ID сообщения из data-post
             data_post = post.get('data-post')
             if not data_post:
                 continue
-            
+
             # data-post имеет формат: "channel_name/message_id"
             parts = data_post.split('/')
             if len(parts) != 2:
                 continue
-            
+
             real_message_id = parts[1]  # Это реальный ID для API
-            
+
             result.append({
                 'source_channel': source['chat_id'],
                 'message_id': int(real_message_id),
@@ -94,20 +95,38 @@ class MemeForwarder:
                 'web_id': parts[0]  # Для информации
             })
             logger.debug(f"  Найден пост: data-post={data_post}")
-        
+
+        if not result:
+            # Посты есть, а медиа-обёрток нет ни у одного — это уже про вёрстку,
+            # а не про «в канале только текст»
+            net.log_layout_changed(
+                f"мемы {source['name']}", source['url'],
+                f"постов найдено {len(posts)}, но ни у одного нет "
+                "*_photo_wrap / *_video_wrap / *_document_wrap",
+            )
+            return []
+
         logger.info(f"✅ Найдено {len(result)} постов с медиа в {source['name']}")
         return result
     
     def get_all_posts(self, limit_per_channel: int = 100) -> List[Dict]:
+        sources = get_meme_sources()
+        if not sources:
+            logger.warning(
+                "⚠️ Список каналов-источников пуст — брать мемы неоткуда. "
+                "Добавь канал командой /sources add"
+            )
+            return []
+
         all_posts = []
-        for source in MEME_SOURCES:
+        for source in sources:
             try:
                 posts = self.get_channel_posts(source, limit_per_channel)
                 all_posts.extend(posts)
                 time.sleep(1)
             except Exception as e:
                 logger.error(f"❌ Ошибка парсинга {source['name']}: {e}")
-        
+
         random.shuffle(all_posts)
         logger.info(f"📊 Всего собрано {len(all_posts)} постов с мемами")
         return all_posts
@@ -140,8 +159,48 @@ class MemeForwarder:
 
 _meme_forwarder = None
 
-def get_random_meme_to_forward() -> Optional[Dict]:
+def _get_forwarder() -> MemeForwarder:
+    """Один экземпляр на процесс: в нём живут сессия и кэш отправленных постов."""
     global _meme_forwarder
     if _meme_forwarder is None:
         _meme_forwarder = MemeForwarder()
-    return _meme_forwarder.get_random_meme_to_forward()
+    return _meme_forwarder
+
+def get_random_meme_to_forward() -> Optional[Dict]:
+    return _get_forwarder().get_random_meme_to_forward()
+
+def invalidate_cache() -> None:
+    """Сбрасывает кэш постов, чтобы правки /sources подействовали сразу.
+
+    sent_cache намеренно не трогаем: иначе после каждой правки списка в канал
+    поехали бы уже отправленные мемы.
+    """
+    forwarder = _get_forwarder()
+    forwarder.posts_cache = []
+    forwarder.last_fetch_time = 0
+    logger.info("🔄 Кэш постов сброшен — список каналов изменился")
+
+def check_channel(name: str) -> Optional[int]:
+    """Сколько постов с медиа видно в канале. None — страницу прочитать не удалось.
+
+    Нужна команде /sources add, чтобы сразу сказать, будет ли с канала толк.
+
+    Работает на своём экземпляре, а не на синглтоне: проверка идёт из потока
+    хендлера, планировщик в это же время может парсить каналы в своём, а
+    requests.Session между потоками делить нельзя.
+
+    Страницу запрашиваем отдельно от разбора: get_channel_posts отдаёт пустой
+    список и когда канал недоступен, и когда в нём просто нет медиа, а для
+    ответа админу это две разные новости.
+    """
+    checker = MemeForwarder()
+    url = f"https://t.me/s/{name}"
+    source = {"name": name, "url": url, "chat_id": f"@{name}"}
+    try:
+        soup = checker._fetch_page(url)
+        if soup is None:
+            return None
+        return len(checker._extract_posts(soup, source, limit=20))
+    except Exception as e:
+        logger.error(f"❌ Не удалось проверить канал {name}: {e}")
+        return None

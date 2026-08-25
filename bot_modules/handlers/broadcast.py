@@ -1,12 +1,14 @@
-"""Обработчик команды /broadcast для создания рекламных постов."""
+"""Обработчик команды /broadcast для создания рекламных постов.
+
+CallbackQueryHandler для broadcast_callback регистрируется в bot.py — здесь
+модульной регистрации быть не должно, иначе один и тот же callback вешается дважды.
+"""
 import logging
-import asyncio
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ContextTypes, ConversationHandler, CommandHandler, MessageHandler, CallbackQueryHandler, filters
+from telegram.ext import ContextTypes, ConversationHandler, CommandHandler, MessageHandler, filters
 
 from bot_modules.posting import handle_stars_payment_flow
-from config import CHANNEL_ID, OWNER_ID
-from bot_modules.client import application
+from config import CHANNEL_ID, is_admin
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +24,7 @@ async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     user_id = update.effective_user.id
     
     # Проверяем, что пользователь — владелец
-    if user_id != OWNER_ID:
+    if not is_admin(user_id):
         await update.message.reply_text("❌ У вас нет прав на использование этой команды.")
         return ConversationHandler.END
     
@@ -50,7 +52,7 @@ async def handle_broadcast_content(update: Update, context: ContextTypes.DEFAULT
     message = update.message
     
     # Проверяем права
-    if user_id != OWNER_ID:
+    if not is_admin(user_id):
         await message.reply_text("❌ У вас нет прав.")
         return ConversationHandler.END
     
@@ -95,7 +97,7 @@ async def broadcast_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     broadcast_message = context.user_data.get('broadcast_message')
     
     # Проверяем права
-    if user_id != OWNER_ID:
+    if not is_admin(user_id):
         await query.edit_message_text("❌ У вас нет прав.")
         return
     
@@ -159,10 +161,10 @@ async def cancel_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     """Отмена создания рекламы."""
     user_id = update.effective_user.id
     
-    if user_id != OWNER_ID:
+    if not is_admin(user_id):
         await update.message.reply_text("❌ У вас нет прав.")
         return ConversationHandler.END
-    
+
     await update.message.reply_text(
         "❌ Создание рекламы отменено.",
         parse_mode="Markdown"
@@ -187,7 +189,3 @@ def get_broadcast_conversation_handler():
         name="broadcast_conversation",
         persistent=False,
     )
-
-
-# Регистрируем обработчик для callback'ов (кнопок)
-application.add_handler(CallbackQueryHandler(broadcast_callback, pattern="^(pay_with_stars|pay_with_card|cancel_broadcast|cancel_stars_payment)$"))

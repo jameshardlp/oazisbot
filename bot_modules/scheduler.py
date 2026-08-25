@@ -2,8 +2,8 @@
 import asyncio
 import logging
 import random
-from datetime import datetime, timedelta
 
+import settings
 from config import CHANNEL_ID
 from content.deepseek import generate_caption_with_validation
 from content.media import get_streamer_media
@@ -11,29 +11,31 @@ from bot_modules.client import bot
 
 logger = logging.getLogger(__name__)
 
-MIN_INTERVAL_HOURS = 1
-MAX_INTERVAL_HOURS = 3
-MIN_INTERVAL = MIN_INTERVAL_HOURS * 3600
-MAX_INTERVAL = MAX_INTERVAL_HOURS * 3600
-MIN_POSTS_PER_DAY = 24 // MAX_INTERVAL_HOURS
 
 async def publish_post():
-    """Публикует один пост в канал (только текст, без видео)."""
+    """Публикует один пост в канал (только текст, без видео).
+
+    Генерация и поиск клипа синхронные и долгие (до 20 сетевых попыток к
+    DeepSeek плюс обход поисковиков), поэтому выполняются в отдельном потоке —
+    иначе на это время event loop замирает и бот не отвечает на команды.
+    """
     try:
         logger.info("📢 Начинаю публикацию поста про стримера...")
-        
+
         # Генерируем пост
-        caption, streamer_key = generate_caption_with_validation()
-        
+        caption, streamer_key = await asyncio.to_thread(generate_caption_with_validation)
+
         if not caption:
             logger.warning("⚠️ Пост не сгенерирован")
             return
-        
+
         logger.info(f"✅ Пост сгенерирован ({len(caption)} символов)")
-        
+
         # Ищем клип (только ссылку, НЕ пытаемся отправить видео)
         if streamer_key:
-            media_url, media_type = get_streamer_media(streamer_key, streamer_key)
+            media_url, media_type = await asyncio.to_thread(
+                get_streamer_media, streamer_key, streamer_key
+            )
             if media_url:
                 # Добавляем ссылку на клип в текст поста
                 caption = f"{caption}\n\n🔗 {media_url}"
@@ -57,17 +59,19 @@ async def scheduler():
     logger.info("=" * 60)
     logger.info("📸 ПЛАНИРОВЩИК СТРИМЕРОВ ЗАПУЩЕН")
     logger.info(f"📡 Канал: {CHANNEL_ID}")
-    logger.info(f"⏱️ Интервал: {MIN_INTERVAL_HOURS}-{MAX_INTERVAL_HOURS} часа")
+    logger.info(f"⏱️ Интервал: {settings.describe_interval()} (меняется командой /interval)")
     logger.info("=" * 60)
-    
+
     await asyncio.sleep(random.randint(10, 30))
     await publish_post()
-    
+
     while True:
-        interval = random.randint(MIN_INTERVAL, MAX_INTERVAL)
-        hours = interval // 3600
-        minutes = (interval % 3600) // 60
-        
-        logger.info(f"⏳ Следующий пост через {hours}ч {minutes}м")
-        await asyncio.sleep(interval)
+        interval = settings.next_interval_seconds()
+        logger.info(f"⏳ Следующий пост через {settings.format_interval(interval)}")
+
+        # Не asyncio.sleep: /interval должен подействовать сразу, а не через часы
+        if await settings.wait_for_next_post(interval):
+            logger.info("♻️ Интервал изменён, отсчёт пошёл заново")
+            continue
+
         await publish_post()

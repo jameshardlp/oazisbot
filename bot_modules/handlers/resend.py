@@ -1,12 +1,16 @@
-"""Обработчик команды /resend для отправки контента в канал от имени бота."""
+"""Обработчик команды /resend для отправки контента в канал от имени бота.
+
+Хендлер регистрируется только через get_resend_conversation_handler() из bot.py.
+Модульный CommandHandler здесь заводить нельзя: он попадёт в группу 0 раньше
+ConversationHandler и перехватит /resend, из-за чего диалог никогда не начнётся.
+"""
 import logging
-from typing import Optional
 
 # Импорты из установленной библиотеки python-telegram-bot
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update
 from telegram.ext import ContextTypes, ConversationHandler, CommandHandler, MessageHandler, filters
 
-from config import OWNER_ID, CHANNEL_ID
+from config import CHANNEL_ID, is_admin
 from bot_modules.client import application
 
 logger = logging.getLogger(__name__)
@@ -18,12 +22,12 @@ AWAITING_CONTENT = 1
 async def resend_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """
     Обработчик команды /resend.
-    Только для владельца бота.
+    Только для владельцев бота.
     """
     user_id = update.effective_user.id
-    
-    # Проверяем, что пользователь — владелец
-    if user_id != OWNER_ID:
+
+    # Проверяем права
+    if not is_admin(user_id):
         await update.message.reply_text("❌ У вас нет прав на использование этой команды.")
         return ConversationHandler.END
     
@@ -51,7 +55,7 @@ async def handle_content(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     message = update.message
     
     # Проверяем права
-    if user_id != OWNER_ID:
+    if not is_admin(user_id):
         await message.reply_text("❌ У вас нет прав.")
         return ConversationHandler.END
     
@@ -131,10 +135,10 @@ async def cancel_resend(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     """Отмена отправки."""
     user_id = update.effective_user.id
     
-    if user_id != OWNER_ID:
+    if not is_admin(user_id):
         await update.message.reply_text("❌ У вас нет прав.")
         return ConversationHandler.END
-    
+
     await update.message.reply_text(
         "❌ Отправка в канал отменена.",
         parse_mode="Markdown"
@@ -158,7 +162,3 @@ def get_resend_conversation_handler():
         name="resend_conversation",
         persistent=False,
     )
-
-
-# Регистрируем обработчик
-application.add_handler(CommandHandler("resend", resend_command))

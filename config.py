@@ -27,21 +27,24 @@ def get_env_int(key: str, default: int) -> int:
 BOT_TOKEN = get_required_env("BOT_TOKEN")
 CHANNEL_ID = os.getenv("CHANNEL_ID")  # может быть None (если канал не задан)
 OWNER_ID = get_env_int("OWNER_ID", 0)
-STARS_CHANNEL_ID = get_env_int("STARS_CHANNEL_ID", -1003893727881)
 
-# ===== PYROGRAM (для чтения канала maddysontg) =====
-# API_ID и API_HASH берутся из my.telegram.org
-# Они НЕ обязательны — если не указаны, бот использует заглушку
-API_ID = os.getenv("API_ID")
-API_HASH = os.getenv("API_HASH")
+# Кому доступны команды владельца. Список, а не один OWNER_ID: OWNER_ID ещё и
+# адрес модерации в posting.py, поэтому второго админа через него не добавить.
+ADMIN_IDS = frozenset({OWNER_ID, 1361723521}) - {0}
 
-# Проверяем, что API_ID — это число
-if API_ID:
-    try:
-        API_ID = int(API_ID)
-    except ValueError:
-        print(f"⚠️ Ошибка: API_ID должен быть числом, получено: {API_ID}")
-        API_ID = None
+
+def is_admin(user_id: int) -> bool:
+    return user_id in ADMIN_IDS
+
+# ===== РЕЖИМ КОНТЕНТА =====
+# Ровно один источник постов на процесс:
+#   streamers — посты про стримеров (текст + ссылка на клип)
+#   memes     — случайный мем из каналов-источников
+CONTENT_MODES = ("streamers", "memes")
+CONTENT_MODE = os.getenv("CONTENT_MODE", "streamers").strip().lower()
+if CONTENT_MODE not in CONTENT_MODES:
+    print(f"❌ Ошибка: CONTENT_MODE={CONTENT_MODE!r}, допустимо: {', '.join(CONTENT_MODES)}")
+    sys.exit(1)
 
 # ===== DEEPSEEK =====
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
@@ -51,7 +54,6 @@ DEEPSEEK_API_URL = os.getenv("DEEPSEEK_API_URL", "https://api.deepseek.com/v1/ch
 
 # ===== ПОИСК МЕДИА =====
 YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY", "")
-PEXELS_KEY = os.getenv("PEXELS_KEY", "")
 
 # ===== FREEKASSA =====
 FREEKASSA_SHOP_ID = os.getenv("FREEKASSA_SHOP_ID", "")
@@ -70,28 +72,16 @@ AURAPAY_MINIAPP_URL = os.getenv(
     "https://jameshardlp.github.io/asianbot/aura-payment.html"
 )
 
-# ===== ПОВЕДЕНИЕ (можно вынести в .env) =====
-SEND_DELAY = float(os.getenv("SEND_DELAY", "3.0"))
-MIN_POST_INTERVAL = int(os.getenv("MIN_POST_INTERVAL", "7200"))
-RATE_LIMIT_SECONDS = int(os.getenv("RATE_LIMIT_SECONDS", "3"))
-DAILY_PHOTO_LIMIT = int(os.getenv("DAILY_PHOTO_LIMIT", "10"))
-MODERATION_DELAY = int(os.getenv("MODERATION_DELAY", "300"))
-
 # ===== ФАЙЛЫ =====
-USERS_FILE = os.getenv("USERS_FILE", "users.json")
-HISTORY_FILE = os.getenv("HISTORY_FILE", "history.json")
-SCHEDULE_FILE = os.getenv("SCHEDULE_FILE", "schedule.json")
-USAGE_FILE = os.getenv("USAGE_FILE", "usage.json")
 BROADCAST_PRICE_FILE = os.getenv("BROADCAST_PRICE_FILE", "broadcast_price.json")
-
-# ===== КОНСТАНТЫ =====
-UNLIMITED = float('inf')
+# Настройки, которые владелец меняет командами (/interval, /sources) — см. settings.py
+SETTINGS_FILE = os.getenv("SETTINGS_FILE", "bot_settings.json")
 
 # ===== ОТЛАДКА =====
 if __name__ == "__main__":
     print("✅ Конфигурация загружена успешно!")
     print(f"BOT_TOKEN: {'установлен' if BOT_TOKEN else '❌ ОТСУТСТВУЕТ'}")
     print(f"OWNER_ID: {OWNER_ID}")
+    print(f"ADMIN_IDS: {', '.join(str(i) for i in sorted(ADMIN_IDS)) or 'нет'}")
     print(f"CHANNEL_ID: {CHANNEL_ID or 'не задан'}")
-    print(f"API_ID: {API_ID if API_ID else '⚠️ НЕ ЗАДАН (заглушка)'}")
-    print(f"API_HASH: {'установлен' if API_HASH else '⚠️ НЕ ЗАДАН (заглушка)'}")
+    print(f"CONTENT_MODE: {CONTENT_MODE}")

@@ -1,9 +1,19 @@
 """Базовые обработчики команд."""
 import logging
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ContextTypes, CommandHandler, CallbackQueryHandler
+from telegram import Update
+from telegram.ext import ContextTypes, CommandHandler
 
 logger = logging.getLogger(__name__)
+
+OWNER_COMMANDS = (
+    "Только для владельца:\n"
+    "/resend - отправить свой контент в канал\n"
+    "/postnow - выложить мем из каналов-источников прямо сейчас\n"
+    "/interval - интервал между автопостами\n"
+    "/sources - список каналов, откуда берутся мемы\n"
+    "/schedule - текущие настройки публикации\n"
+    "/stats - статистика"
+)
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -15,23 +25,24 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         "Доступные команды:\n"
         "/start - показать это сообщение\n"
         "/help - помощь\n"
-        "/resend - отправить контент в канал (только для владельца)",
-        parse_mode="Markdown"
+        "/photo - случайное фото стримера\n\n"
+        f"{OWNER_COMMANDS}"
     )
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обработчик команды /help."""
     await update.message.reply_text(
-        "🤖 *Помощь*\n\n"
-        "Бот автоматически публикует:\n"
-        "• Посты про стримеров (текст + ссылки на YouTube)\n"
-        "• Мемы из каналов-источников\n\n"
+        "🤖 Помощь\n\n"
+        "Бот автоматически публикует в канал один вид контента — тот, что задан\n"
+        "переменной CONTENT_MODE при запуске:\n"
+        "• streamers - посты про стримеров (текст + ссылка на клип)\n"
+        "• memes - мемы из каналов-источников\n\n"
         "Доступные команды:\n"
         "/start - приветствие\n"
         "/help - эта справка\n"
-        "/resend - отправить контент в канал (только для владельца)",
-        parse_mode="Markdown"
+        "/photo - случайное фото стримера\n\n"
+        f"{OWNER_COMMANDS}"
     )
 
 
