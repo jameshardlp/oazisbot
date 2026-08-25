@@ -18,22 +18,29 @@ MAX_INTERVAL = MAX_INTERVAL_HOURS * 3600
 MIN_POSTS_PER_DAY = 24 // MAX_INTERVAL_HOURS
 
 async def publish_post():
-    """Публикует один пост в канал (только текст, без видео)."""
+    """Публикует один пост в канал (только текст, без видео).
+
+    Генерация и поиск клипа синхронные и долгие (до 20 сетевых попыток к
+    DeepSeek плюс обход поисковиков), поэтому выполняются в отдельном потоке —
+    иначе на это время event loop замирает и бот не отвечает на команды.
+    """
     try:
         logger.info("📢 Начинаю публикацию поста про стримера...")
-        
+
         # Генерируем пост
-        caption, streamer_key = generate_caption_with_validation()
-        
+        caption, streamer_key = await asyncio.to_thread(generate_caption_with_validation)
+
         if not caption:
             logger.warning("⚠️ Пост не сгенерирован")
             return
-        
+
         logger.info(f"✅ Пост сгенерирован ({len(caption)} символов)")
-        
+
         # Ищем клип (только ссылку, НЕ пытаемся отправить видео)
         if streamer_key:
-            media_url, media_type = get_streamer_media(streamer_key, streamer_key)
+            media_url, media_type = await asyncio.to_thread(
+                get_streamer_media, streamer_key, streamer_key
+            )
             if media_url:
                 # Добавляем ссылку на клип в текст поста
                 caption = f"{caption}\n\n🔗 {media_url}"

@@ -7,17 +7,15 @@ import sys
 from aiohttp import web
 
 # Импорты из установленной библиотеки python-telegram-bot
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CallbackQueryHandler, CommandHandler
+from telegram.ext import CallbackQueryHandler
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 
-from config import FREEKASSA_SHOP_ID, FREEKASSA_SECRET1, SEND_DELAY, BOT_TOKEN
-from bot_modules.client import application, bot
-from bot_modules import handlers
+from config import FREEKASSA_SHOP_ID, FREEKASSA_SECRET1, CONTENT_MODE
+from bot_modules.client import application
 from bot_modules.scheduler import scheduler
 from bot_modules.meme_scheduler import meme_scheduler
 from payments.webhooks import freekassa_webhook, aurapay_webhook
@@ -65,9 +63,11 @@ async def main() -> None:
     """Основная асинхронная функция."""
     logger.info("=" * 60)
     logger.info("🤖 БОТ ЗАПУЩЕН")
-    logger.info("📸 Посты про стримеров (текст + ссылки на YouTube)")
-    logger.info("🎬 Мемы из каналов (скачивание и отправка)")
-    logger.info("📦 Источники мемов: videos_dolboyoba, shitcollection, postleftism, noviop")
+    if CONTENT_MODE == "streamers":
+        logger.info("📸 Режим контента: СТРИМЕРЫ (текст + ссылки на YouTube)")
+    else:
+        logger.info("🎬 Режим контента: МЕМЫ из каналов (скачивание и отправка)")
+        logger.info("📦 Источники мемов: videos_dolboyoba, shitcollection, postleftism, noviop")
     logger.info("📤 Команда /resend — отправка контента в канал от имени бота")
     logger.info("📸 Команда /photo — случайное фото стримера")
     logger.info("=" * 60)
@@ -98,11 +98,11 @@ async def main() -> None:
     resend_handler = get_resend_conversation_handler()
     application.add_handler(resend_handler)
 
-    # Запускаем планировщик стримеров как фоновую задачу
-    scheduler_task = asyncio.create_task(scheduler())
-    
-    # Запускаем планировщик мемов как фоновую задачу
-    meme_scheduler_task = asyncio.create_task(meme_scheduler())
+    # Запускаем ровно один планировщик контента — тот, что выбран в CONTENT_MODE
+    if CONTENT_MODE == "streamers":
+        content_task = asyncio.create_task(scheduler())
+    else:
+        content_task = asyncio.create_task(meme_scheduler())
 
     try:
         # Запускаем бота
@@ -124,9 +124,8 @@ async def main() -> None:
         await application.stop()
         await application.shutdown()
         
-        # Отменяем фоновые задачи
-        scheduler_task.cancel()
-        meme_scheduler_task.cancel()
+        # Отменяем фоновую задачу планировщика
+        content_task.cancel()
         
         await shutdown_tasks()
         logger.info("✅ Бот остановлен")

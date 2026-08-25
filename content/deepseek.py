@@ -7,16 +7,15 @@ generate_caption_with_validation делает до 20 попыток: генер
 import logging
 import random
 import time
-import requests
 import re
 from typing import Optional, Tuple, List
 
 from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL, DEEPSEEK_API_URL
-from content.prompts import get_system_prompt, get_style_prompt
+from content import net
+from content.prompts import get_system_prompt
 from content.streamers import STREAMER_INFO, get_streamer_for_post
-from content.text import clean_text, validate_caption, truncate_by_sentences, add_to_last_posts
+from content.text import clean_text, validate_caption, truncate_by_sentences
 from content.channel_parser import get_posts_from_channel_web, get_default_style_examples
-from content.media import get_streamer_media, get_random_photo
 
 logger = logging.getLogger(__name__)
 
@@ -388,8 +387,8 @@ def request_continuation(previous_text: str) -> str:
             "temperature": 0.9,
             "max_tokens": 200,
         }
-        response = requests.post(url, headers=headers, json=data, timeout=30)
-        if response.status_code == 200:
+        response = net.post(url, headers=headers, json=data, timeout=30, label="DeepSeek (дописать концовку)")
+        if response is not None and response.status_code == 200:
             result = response.json()
             if result.get("choices") and len(result["choices"]) > 0:
                 return result["choices"][0].get("message", {}).get("content", "").strip()
@@ -429,13 +428,18 @@ def validate_post_with_deepseek(post_text: str) -> Tuple[bool, str]:
             "max_tokens": 100,
         }
         
-        response = requests.post(
+        response = net.post(
             DEEPSEEK_API_URL,
             headers=headers,
             json=data,
-            timeout=15
+            timeout=15,
+            label="DeepSeek (модерация поста)",
         )
-        
+
+        if response is None:
+            logger.error("❌ DeepSeek не ответил на проверку поста")
+            return True, post_text
+
         if response.status_code == 200:
             result = response.json()
             verdict = result["choices"][0]["message"]["content"].strip()
@@ -540,8 +544,7 @@ def generate_caption_with_validation() -> Tuple[str, Optional[str]]:
     # Получаем стиль из канала maddysontg через веб-парсер
     style_context = get_style_context(limit=5)
     
-    # Всегда выбираем тему стримеров (убрана Азия)
-    style = 'streamer'
+    # Тема всегда одна — стримеры
     streamer_key, streamer_display = get_streamer_for_post()
     topic = f"стример {streamer_display}"
     logger.info(f"🎯 ТЕМА: СТРИМЕР - {streamer_display}")
@@ -673,8 +676,15 @@ def generate_caption_with_validation() -> Tuple[str, Optional[str]]:
                 "max_tokens": 500,
             }
             
-            response = requests.post(url, headers=headers, json=data, timeout=60)
-            
+            response = net.post(
+                url, headers=headers, json=data, timeout=60,
+                label=f"DeepSeek (генерация поста, попытка {attempt+1})",
+            )
+
+            if response is None:
+                # net уже отлогировал причину и исчерпал ретраи — идём на следующую попытку
+                continue
+
             if response.status_code == 400:
                 error_text = response.text.lower()
                 if "извините" in error_text or "не могу" in error_text or "не разрешено" in error_text:
@@ -776,15 +786,11 @@ def generate_caption_with_validation() -> Tuple[str, Optional[str]]:
             
             if approved:
                 logger.info(f"✅ Пост одобрен! (попытка {attempt+1}) Длина: {len(caption)} символов, абзацев: {paragraph_count}")
-                add_to_last_posts(caption)
                 return caption, streamer_key
             else:
                 logger.warning(f"❌ Пост не прошёл проверку: {result}")
                 continue
-            
-        except requests.exceptions.Timeout:
-            logger.warning(f"Таймаут запроса (попытка {attempt+1})")
-            continue
+
         except Exception as e:
             logger.error(f"Ошибка генерации (попытка {attempt+1}): {e}")
             continue

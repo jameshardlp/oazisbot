@@ -8,97 +8,65 @@ import time
 import re
 from typing import List, Optional, Dict, Any
 from datetime import datetime
-from urllib.parse import urljoin
 
-import requests
 from bs4 import BeautifulSoup
+
+from content import net
 
 logger = logging.getLogger(__name__)
 
-# Настройки парсера
-USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-REQUEST_TIMEOUT = 15
-MAX_RETRIES = 3
-RETRY_DELAY = 2
-
 class TelegramChannelParser:
     """Парсер публичных Telegram каналов."""
-    
+
     def __init__(self, username: str):
         """
         Инициализация парсера для конкретного канала.
-        
+
         Args:
             username: Имя канала без @ (например, "maddysontg")
         """
         self.username = username.strip('@')
         self.base_url = f"https://t.me/s/{self.username}"
-        self.session = requests.Session()
-        self.session.headers.update({
-            'User-Agent': USER_AGENT,
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
-            'Accept-Encoding': 'gzip, deflate, br',
-            'DNT': '1',
-            'Connection': 'keep-alive',
-            'Upgrade-Insecure-Requests': '1',
-        })
-        
+        # Своя сессия (у t.me свои cookies), но заголовки и ретраи — общие
+        self.session = net.new_session()
+
     def _fetch_page(self, url: str) -> Optional[BeautifulSoup]:
         """
         Загружает страницу и возвращает BeautifulSoup объект.
-        
+
+        Таймауты, ретраи и учёт Retry-After — внутри net.request.
+
         Args:
             url: URL страницы для загрузки
-            
+
         Returns:
             BeautifulSoup объект или None при ошибке
         """
-        for attempt in range(MAX_RETRIES):
-            try:
-                response = self.session.get(
-                    url,
-                    timeout=REQUEST_TIMEOUT,
-                    allow_redirects=True
-                )
-                
-                if response.status_code == 200:
-                    # Проверяем, что это HTML, а не JSON или что-то ещё
-                    content_type = response.headers.get('Content-Type', '')
-                    if 'text/html' in content_type or response.text.strip().startswith('<!DOCTYPE'):
-                        return BeautifulSoup(response.text, 'lxml')
-                    else:
-                        logger.warning(f"Не HTML ответ: {content_type}")
-                        return None
-                elif response.status_code == 429:
-                    # Слишком много запросов
-                    wait_time = RETRY_DELAY * (attempt + 1)
-                    logger.warning(f"Rate limit, ждём {wait_time} секунд...")
-                    time.sleep(wait_time)
-                    continue
-                elif response.status_code == 404:
-                    logger.error(f"Канал {self.username} не найден или недоступен")
-                    return None
-                else:
-                    logger.warning(f"Ошибка HTTP {response.status_code} (попытка {attempt + 1})")
-                    time.sleep(RETRY_DELAY)
-                    continue
-                    
-            except requests.exceptions.Timeout:
-                logger.warning(f"Таймаут при загрузке (попытка {attempt + 1})")
-                time.sleep(RETRY_DELAY)
-                continue
-            except requests.exceptions.ConnectionError:
-                logger.warning(f"Ошибка соединения (попытка {attempt + 1})")
-                time.sleep(RETRY_DELAY)
-                continue
-            except Exception as e:
-                logger.error(f"Ошибка при загрузке страницы: {e}")
-                time.sleep(RETRY_DELAY)
-                continue
-        
-        return None
-    
+        response = net.request(
+            "GET", url,
+            session=self.session,
+            allow_redirects=True,
+            label=f"канал @{self.username}",
+        )
+        if response is None:
+            return None
+
+        if response.status_code == 404:
+            logger.error(f"Канал {self.username} не найден или недоступен")
+            return None
+
+        if response.status_code != 200:
+            logger.warning(f"Канал @{self.username}: HTTP {response.status_code}")
+            return None
+
+        # Проверяем, что это HTML, а не JSON или что-то ещё
+        content_type = response.headers.get('Content-Type', '')
+        if 'text/html' not in content_type and not response.text.strip().startswith('<!DOCTYPE'):
+            logger.warning(f"Не HTML ответ: {content_type}")
+            return None
+
+        return BeautifulSoup(response.text, 'lxml')
+
     def _parse_message(self, message_elem) -> Optional[Dict[str, Any]]:
         """
         Парсит одно сообщение из элемента BeautifulSoup.
@@ -188,22 +156,34 @@ class TelegramChannelParser:
         
         # Находим все сообщения
         messages = soup.select('.tgme_widget_message')
-        
+
         if not messages:
-            logger.warning(f"⚠️ Сообщения не найдены. Возможно, канал приватный или изменилась вёрстка.")
-            # Попробуем альтернативные селекторы
+            # Пробуем альтернативный селектор, прежде чем считать вёрстку сломанной
             messages = soup.select('.tgme_widget_message_wrap')
-        
+            if not messages:
+                net.log_layout_changed(
+                    f"канал @{self.username}", url,
+                    "нет ни .tgme_widget_message, ни .tgme_widget_message_wrap "
+                    "(либо канал приватный)",
+                )
+                return []
+
         posts = []
         for msg in messages[:limit]:
             parsed = self._parse_message(msg)
             if parsed and parsed['text']:
                 posts.append(parsed['text'])
-                
+
                 # Если набрали нужное количество
                 if len(posts) >= limit:
                     break
-        
+
+        if not posts:
+            net.log_layout_changed(
+                f"канал @{self.username}", url,
+                f"сообщений найдено {len(messages)}, но ни в одном нет .tgme_widget_message_text",
+            )
+
         logger.info(f"✅ Получено {len(posts)} постов из канала {self.username}")
         return posts
     
@@ -224,15 +204,28 @@ class TelegramChannelParser:
             return []
         
         messages = soup.select('.tgme_widget_message')
+        if not messages:
+            net.log_layout_changed(
+                f"канал @{self.username}", self.base_url,
+                "нет ни одного .tgme_widget_message (либо канал приватный)",
+            )
+            return []
+
         posts = []
-        
+
         for msg in messages[:limit]:
             parsed = self._parse_message(msg)
             if parsed and parsed['text']:
                 posts.append(parsed)
                 if len(posts) >= limit:
                     break
-        
+
+        if not posts:
+            net.log_layout_changed(
+                f"канал @{self.username}", self.base_url,
+                f"сообщений найдено {len(messages)}, но ни в одном нет .tgme_widget_message_text",
+            )
+
         logger.info(f"✅ Получено {len(posts)} постов с метаданными")
         return posts
 
@@ -306,11 +299,15 @@ def get_posts_from_channel_web(limit: int = 5, force_refresh: bool = False) -> L
 
 
 def get_default_style_examples() -> List[str]:
-    """Возвращает примеры стиля на случай, если канал недоступен."""
+    """Возвращает примеры стиля на случай, если канал недоступен.
+
+    Тема примеров — только стримеры: азиатская тематика убрана, а промпт
+    генерации её прямо запрещает, так что такой пример только сбивал модель.
+    """
     return [
         "Да ну нахуй, этот клоун опять на стриме орёт. Сидел бы лучше в МЧС, чем зрителей за деньги веселить.",
         "Смотрю я на этого блогера и думаю — ну как так можно жить? Накрутил ботов и думает что он король.",
-        "Азия — это пиздец. Там такое творится, что я ахерел. Люди живут в каком-то параллельном мире.",
+        "Этот донатер закинул сотку и требует внимания весь стрим. Ну ты серьёзно, мужик, купи себе друга.",
         "Дианочка снова накрутила. Сколько можно? У меня уже крыша едет от этой ботоводки.",
     ]
 

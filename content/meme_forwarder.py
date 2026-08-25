@@ -2,10 +2,11 @@
 import logging
 import random
 import time
-import re
 from typing import List, Dict, Optional
-import requests
+
 from bs4 import BeautifulSoup
+
+from content import net
 
 logger = logging.getLogger(__name__)
 
@@ -34,59 +35,60 @@ MEME_SOURCES = [
 
 class MemeForwarder:
     def __init__(self):
-        self.session = requests.Session()
-        self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        })
+        # Своя сессия (t.me ставит свои cookies), заголовки и ретраи — общие
+        self.session = net.new_session()
         self.sent_cache = set()
         self.posts_cache = []
         self.last_fetch_time = 0
         self.cache_ttl = 3600
-    
+
     def _fetch_page(self, url: str) -> Optional[BeautifulSoup]:
-        try:
-            response = self.session.get(url, timeout=15)
-            if response.status_code == 200:
-                return BeautifulSoup(response.text, 'html.parser')
+        response = net.request(
+            "GET", url, session=self.session, label=f"мемы {url}",
+        )
+        if response is None or response.status_code != 200:
+            if response is not None:
+                logger.warning(f"⚠️ {url}: HTTP {response.status_code}")
             return None
-        except Exception as e:
-            logger.error(f"Ошибка загрузки {url}: {e}")
-            return None
-    
+        return BeautifulSoup(response.text, 'html.parser')
+
     def get_channel_posts(self, source: Dict, limit: int = 100) -> List[Dict]:
         """Получает реальные ID постов с медиа из канала."""
         logger.info(f"📥 Парсинг {source['name']}...")
         soup = self._fetch_page(source['url'])
         if not soup:
             return []
-        
+
         # Ищем все посты
         posts = soup.select('.tgme_widget_message')
         if not posts:
-            logger.warning(f"⚠️ Нет постов в {source['name']}")
+            net.log_layout_changed(
+                f"мемы {source['name']}", source['url'],
+                "нет ни одного .tgme_widget_message",
+            )
             return []
-        
+
         logger.info(f"📊 Найдено {len(posts)} постов в {source['name']}")
-        
+
         result = []
         for post in posts[:limit]:
             # Проверяем наличие медиа
             has_media = post.select_one('.tgme_widget_message_photo_wrap, .tgme_widget_message_video_wrap, .tgme_widget_message_document_wrap')
             if not has_media:
                 continue
-            
+
             # Получаем РЕАЛЬНЫЙ ID сообщения из data-post
             data_post = post.get('data-post')
             if not data_post:
                 continue
-            
+
             # data-post имеет формат: "channel_name/message_id"
             parts = data_post.split('/')
             if len(parts) != 2:
                 continue
-            
+
             real_message_id = parts[1]  # Это реальный ID для API
-            
+
             result.append({
                 'source_channel': source['chat_id'],
                 'message_id': int(real_message_id),
@@ -94,7 +96,17 @@ class MemeForwarder:
                 'web_id': parts[0]  # Для информации
             })
             logger.debug(f"  Найден пост: data-post={data_post}")
-        
+
+        if not result:
+            # Посты есть, а медиа-обёрток нет ни у одного — это уже про вёрстку,
+            # а не про «в канале только текст»
+            net.log_layout_changed(
+                f"мемы {source['name']}", source['url'],
+                f"постов найдено {len(posts)}, но ни у одного нет "
+                "*_photo_wrap / *_video_wrap / *_document_wrap",
+            )
+            return []
+
         logger.info(f"✅ Найдено {len(result)} постов с медиа в {source['name']}")
         return result
     
