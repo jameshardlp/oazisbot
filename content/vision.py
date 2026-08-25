@@ -1,15 +1,14 @@
-"""Проверка и описание картинок через DeepSeek.
+"""Проверка картинок через DeepSeek.
 
 ВНИМАНИЕ: DEEPSEEK_VISION_MODEL по умолчанию "deepseek-vl-chat", и её, скорее
-всего, нет в вашем аккаунте — тогда verify_* всегда возвращают True (fail-open),
-а analyze_photo_for_comment молча отдаёт None.
+всего, нет в вашем аккаунте — тогда verify_* всегда возвращают True (fail-open).
 """
 import base64
 import logging
-import requests
 from typing import Optional
 
-from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL, DEEPSEEK_VISION_MODEL, DEEPSEEK_API_URL
+from config import DEEPSEEK_API_KEY, DEEPSEEK_VISION_MODEL, DEEPSEEK_API_URL
+from content import net
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +47,16 @@ def _ask_deepseek_about_image(image_url: str, question: str, log_label: str) -> 
             "temperature": 0.1
         }
 
-        response = requests.post(DEEPSEEK_API_URL, headers=headers, json=data, timeout=15)
+        response = net.post(
+            DEEPSEEK_API_URL,
+            headers=headers,
+            json=data,
+            timeout=15,
+            label=f"DeepSeek Vision ({log_label})",
+        )
+
+        if response is None:
+            return True
 
         if response.status_code == 200:
             answer = response.json()["choices"][0]["message"]["content"].strip().upper()
@@ -70,77 +78,12 @@ def verify_photo_with_deepseek(image_url: str, streamer_name: str) -> bool:
         f"фото для {streamer_name}"
     )
 
-def verify_asia_photo_with_deepseek(image_url: str) -> bool:
-    """Проверяет через DeepSeek, что на фото азиатская модель/девушка"""
-    return _ask_deepseek_about_image(
-        image_url,
-        "Посмотри на это фото. Это азиатская девушка/модель? Ответь только 'ДА' или 'НЕТ'.",
-        "азиатского фото"
-    )
-
 def encode_image_to_base64_url(image_url: str) -> Optional[str]:
     try:
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-        }
-        response = requests.get(image_url, headers=headers, timeout=10)
-        if response.status_code == 200:
+        response = net.get(image_url, timeout=10, label="загрузка картинки")
+        if response is not None and response.status_code == 200:
             return base64.b64encode(response.content).decode('utf-8')
         return None
     except Exception as e:
         logger.error(f"Ошибка загрузки картинки: {e}")
-        return None
-
-async def analyze_photo_for_comment(image_url: str) -> Optional[str]:
-    if not DEEPSEEK_API_KEY:
-        return None
-    
-    try:
-        base64_image = encode_image_to_base64_url(image_url)
-        if not base64_image:
-            return None
-        
-        headers = {
-            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-            "Content-Type": "application/json"
-        }
-        
-        data = {
-            "model": DEEPSEEK_MODEL,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": "Коротко опиши что на фото. 1-2 предложения. Грубо, с юмором. Используй мат."
-                        },
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/jpeg;base64,{base64_image}"
-                            }
-                        }
-                    ]
-                }
-            ],
-            "max_tokens": 150,
-            "temperature": 1.1
-        }
-        
-        response = requests.post(
-            DEEPSEEK_API_URL,
-            headers=headers,
-            json=data,
-            timeout=30
-        )
-        
-        if response.status_code == 200:
-            result = response.json()
-            comment = result["choices"][0]["message"]["content"].strip()
-            logger.info(f"🖼️ Комментарий к фото: {comment}")
-            return comment
-        return None
-    except Exception as e:
-        logger.error(f"Ошибка анализа фото: {e}")
         return None

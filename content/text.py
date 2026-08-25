@@ -2,9 +2,6 @@
 import re
 from typing import Optional, Tuple
 
-# Последние посты — для проверки на самоповтор
-last_posts = []
-
 def clean_punctuation(text: str) -> str:
     if not text:
         return ''
@@ -177,23 +174,3 @@ def validate_caption(text: str, min_length: int = 600, max_length: int = 900) ->
             else:
                 return False, 'Последнее предложение не завершено логически'
     return True, None
-
-def add_to_last_posts(text: str):
-    global last_posts
-    if not text or len(text) < 10:
-        return
-    key = text[:100]
-    last_posts.append(key)
-    if len(last_posts) > 20:
-        last_posts.pop(0)
-
-def is_similar(text: str) -> bool:
-    global last_posts
-    if not text:
-        return False
-    key = text[:150]
-    for post in last_posts:
-        same_chars = sum(1 for a, b in zip(key, post) if a == b)
-        if len(key) > 10 and same_chars / len(key) > 0.70:
-            return True
-    return False

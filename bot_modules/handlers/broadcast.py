@@ -1,12 +1,14 @@
-"""Обработчик команды /broadcast для создания рекламных постов."""
+"""Обработчик команды /broadcast для создания рекламных постов.
+
+CallbackQueryHandler для broadcast_callback регистрируется в bot.py — здесь
+модульной регистрации быть не должно, иначе один и тот же callback вешается дважды.
+"""
 import logging
-import asyncio
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ContextTypes, ConversationHandler, CommandHandler, MessageHandler, CallbackQueryHandler, filters
+from telegram.ext import ContextTypes, ConversationHandler, CommandHandler, MessageHandler, filters
 
 from bot_modules.posting import handle_stars_payment_flow
 from config import CHANNEL_ID, OWNER_ID
-from bot_modules.client import application
 
 logger = logging.getLogger(__name__)
 
@@ -187,7 +189,3 @@ def get_broadcast_conversation_handler():
         name="broadcast_conversation",
         persistent=False,
     )
-
-
-# Регистрируем обработчик для callback'ов (кнопок)
-application.add_handler(CallbackQueryHandler(broadcast_callback, pattern="^(pay_with_stars|pay_with_card|cancel_broadcast|cancel_stars_payment)$"))

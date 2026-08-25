@@ -1,8 +1,5 @@
-"""Сборка и кэширование промптов для DeepSeek."""
+"""Сборка и кэширование системного промпта для DeepSeek."""
 import logging
-from typing import Optional
-
-from content.streamers import STREAMER_INFO, style_prompts
 
 logger = logging.getLogger(__name__)
 
@@ -31,49 +28,3 @@ def get_system_prompt() -> str:
 Отвечай ТОЛЬКО готовым постом. БЕЗ РАССУЖДЕНИЙ."""
         logger.info("💾 Системный промпт закэширован")
     return _system_prompt_cache[cache_key]
-
-def get_style_prompt(style: str, streamer_key: Optional[str] = None) -> str:
-    cache_key = f"style_prompt_{style}_{streamer_key}"
-    
-    if cache_key not in _system_prompt_cache:
-        base_prompt = style_prompts.get(style, style_prompts.get('streamer', ''))
-        
-        if streamer_key and streamer_key in STREAMER_INFO:
-            info = STREAMER_INFO[streamer_key]
-            name = info['name']
-            pronoun = info['pronoun']
-            genitive = info['genitive']
-            dative = info['dative']
-            accusative = info['accusative']
-            instrumental = info['instrumental']
-            prepositional = info['prepositional']
-            
-            gender_hint = f"""
-⚠️ ВАЖНО! СТРИМЕР {name} — {pronoun.upper()}
-
-Правильные падежи для {name}:
-- Именительный: {name}
-- Родительный: {genitive}
-- Дательный: {dative}
-- Винительный: {accusative}
-- Творительный: {instrumental}
-- Предложный: {prepositional}
-"""
-            _system_prompt_cache[cache_key] = gender_hint + base_prompt + """
-
-⚠️ ВАЖНО: Пиши строго по теме. Без рассуждений. Только готовый пост.
-Твой ответ (ТОЛЬКО ПОСТ, БЕЗ РАССУЖДЕНИЙ):"""
-        else:
-            _system_prompt_cache[cache_key] = base_prompt + """
-
-⚠️ ВАЖНО: Пиши строго по теме. Без рассуждений. Только готовый пост.
-Твой ответ (ТОЛЬКО ПОСТ, БЕЗ РАССУЖДЕНИЙ):"""
-        
-        logger.info(f"💾 Промпт для стиля {style} закэширован")
-    
-    return _system_prompt_cache[cache_key]
-
-def clear_prompt_cache():
-    global _system_prompt_cache
-    _system_prompt_cache.clear()
-    logger.info("🗑️ Кэш промптов очищен")

@@ -1,9 +1,13 @@
-"""Обработчик команды /resend для отправки контента в канал от имени бота."""
+"""Обработчик команды /resend для отправки контента в канал от имени бота.
+
+Хендлер регистрируется только через get_resend_conversation_handler() из bot.py.
+Модульный CommandHandler здесь заводить нельзя: он попадёт в группу 0 раньше
+ConversationHandler и перехватит /resend, из-за чего диалог никогда не начнётся.
+"""
 import logging
-from typing import Optional
 
 # Импорты из установленной библиотеки python-telegram-bot
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update
 from telegram.ext import ContextTypes, ConversationHandler, CommandHandler, MessageHandler, filters
 
 from config import OWNER_ID, CHANNEL_ID
@@ -158,7 +162,3 @@ def get_resend_conversation_handler():
         name="resend_conversation",
         persistent=False,
     )
-
-
-# Регистрируем обработчик
-application.add_handler(CommandHandler("resend", resend_command))
