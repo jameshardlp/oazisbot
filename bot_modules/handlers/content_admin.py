@@ -1,4 +1,4 @@
-"""Админские команды управления контентом: /interval, /postnow, /sources.
+"""Админские команды управления контентом: /mode, /interval, /postnow, /sources.
 
 Ответы намеренно без parse_mode: имена каналов содержат подчёркивания
 (videos_dolboyoba), и в режиме Markdown Telegram либо отвергнет сообщение,
@@ -16,6 +16,13 @@ from content import meme_forwarder
 from bot_modules.meme_scheduler import send_meme_to_channel
 
 logger = logging.getLogger(__name__)
+
+MODE_USAGE = (
+    "Как переключить:\n"
+    "/mode streamers — посты про стримеров\n"
+    "/mode memes — мемы из каналов-источников\n"
+    "Одновременно работает ровно один режим."
+)
 
 INTERVAL_USAGE = (
     "Как задать:\n"
@@ -46,6 +53,72 @@ async def _require_owner(update: Update) -> bool:
         return False
 
     return True
+
+
+# ===== /mode =====
+
+async def mode_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Показывает или переключает режим контента без перезапуска бота."""
+    if not await _require_owner(update):
+        return
+
+    args = context.args or []
+
+    if not args:
+        await update.message.reply_text(
+            f"🔀 Текущий режим: {settings.describe_content_mode()}\n\n{MODE_USAGE}"
+        )
+        return
+
+    if len(args) > 1:
+        await update.message.reply_text(f"⚠️ Ожидаю один режим.\n\n{MODE_USAGE}")
+        return
+
+    mode = args[0].strip().lower().lstrip("/")
+
+    # Синонимы: подсказки в /help называют режимы точно, но «мемы» руками набрать
+    # проще, чем переключаться на латиницу
+    aliases = {
+        "memes": "memes", "meme": "memes", "мемы": "memes", "мем": "memes",
+        "streamers": "streamers", "streamer": "streamers",
+        "стримеры": "streamers", "стример": "streamers",
+    }
+    mode = aliases.get(mode, mode)
+
+    if mode not in settings.CONTENT_MODES:
+        await update.message.reply_text(
+            f"⚠️ Неизвестный режим: {args[0]}\n\n{MODE_USAGE}"
+        )
+        return
+
+    if mode == settings.get_content_mode():
+        await update.message.reply_text(
+            f"ℹ️ Режим уже такой: {settings.describe_content_mode()}"
+        )
+        return
+
+    ok = settings.set_content_mode(mode)
+
+    lines = [
+        f"✅ Режим переключён: {settings.describe_content_mode()}",
+        # Оба планировщика после старта ждут 10-60 секунд и публикуют первый пост
+        "♻️ Планировщик перезапущен: первый пост примерно через минуту, "
+        f"дальше — раз в {settings.describe_interval()}.",
+    ]
+
+    if mode == "memes" and not settings.get_meme_channels():
+        lines.append(
+            "⚠️ Список каналов-источников пуст — мемы брать неоткуда. "
+            "Добавь канал: /sources add <канал>"
+        )
+
+    if not ok:
+        lines.append(
+            "⚠️ Не удалось записать настройки в файл — после перезапуска "
+            "вернётся прежний режим."
+        )
+
+    await update.message.reply_text("\n".join(lines))
 
 
 # ===== /interval =====
@@ -288,6 +361,7 @@ async def sources_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 def register_content_admin_handlers(app):
     """Регистрирует команды управления контентом."""
+    app.add_handler(CommandHandler("mode", mode_command))
     app.add_handler(CommandHandler("interval", interval_command))
     app.add_handler(CommandHandler("postnow", postnow_command))
     app.add_handler(CommandHandler("sources", sources_command))

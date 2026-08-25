@@ -1,9 +1,9 @@
 """Настройки, которые владелец меняет командами на ходу.
 
 Отличие от config.py: там переменные окружения, читаются один раз при старте и
-меняются только перезапуском. Здесь — интервал постинга и список каналов с
-мемами: их правят командами /interval и /sources, и они переживают перезапуск
-через JSON-файл.
+меняются только перезапуском. Здесь — интервал постинга, режим контента и
+список каналов с мемами: их правят командами /interval, /mode и /sources, и они
+переживают перезапуск через JSON-файл.
 
 Модуль лежит в корне, а не в bot_modules/: его импортирует content/meme_forwarder,
 а зависимость content → bot_modules перевернула бы слои.
@@ -15,7 +15,7 @@ import random
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
-from config import SETTINGS_FILE
+from config import CONTENT_MODE, CONTENT_MODES, SETTINGS_FILE
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +29,15 @@ DEFAULT_MEME_CHANNELS = [
     "postleftism",
     "noviop",
 ]
+
+# CONTENT_MODE из окружения — только начальное значение: как только режим сменили
+# командой /mode, решает файл настроек, иначе команда сбрасывалась бы перезапуском
+DEFAULT_CONTENT_MODE = CONTENT_MODE
+
+CONTENT_MODE_LABELS = {
+    "streamers": "посты про стримеров (текст + ссылка на клип)",
+    "memes": "мемы из каналов-источников",
+}
 
 # Границы, в которых принимаем интервал от админа
 MIN_ALLOWED_MINUTES = 1
@@ -44,11 +53,16 @@ _CHANNEL_RE = re.compile(r'^[A-Za-z0-9_]{4,32}$')
 # сменил интервал, — иначе новое значение подействовало бы только через часы
 changed = asyncio.Event()
 
+# Смена режима будит надзорную задачу в bot.py: она гасит текущий планировщик и
+# поднимает тот, что соответствует новому режиму
+mode_changed = asyncio.Event()
+
 _settings: Optional[Dict[str, Any]] = None
 
 
 def _defaults() -> Dict[str, Any]:
     return {
+        "content_mode": DEFAULT_CONTENT_MODE,
         "interval_min_minutes": DEFAULT_MIN_MINUTES,
         "interval_max_minutes": DEFAULT_MAX_MINUTES,
         "meme_channels": list(DEFAULT_MEME_CHANNELS),
@@ -65,6 +79,15 @@ def _sanitize(raw: Any) -> Dict[str, Any]:
     if not isinstance(raw, dict):
         logger.warning(f"⚠️ {SETTINGS_FILE}: ожидался объект, взяты значения по умолчанию")
         return result
+
+    mode = raw.get("content_mode")
+    if isinstance(mode, str) and mode.strip().lower() in CONTENT_MODES:
+        result["content_mode"] = mode.strip().lower()
+    elif mode is not None:
+        logger.warning(
+            f"⚠️ {SETTINGS_FILE}: неизвестный режим {mode!r}, "
+            f"использую {DEFAULT_CONTENT_MODE}"
+        )
 
     lo = raw.get("interval_min_minutes")
     hi = raw.get("interval_max_minutes")
@@ -134,6 +157,28 @@ def save() -> bool:
     except OSError as e:
         logger.error(f"❌ Не удалось сохранить {SETTINGS_FILE}: {e}")
         return False
+
+
+# ===== РЕЖИМ КОНТЕНТА =====
+
+def get_content_mode() -> str:
+    return load()["content_mode"]
+
+
+def set_content_mode(mode: str) -> bool:
+    """Сохраняет режим и будит надзорную задачу, чтобы та сменила планировщик."""
+    data = load()
+    data["content_mode"] = mode
+    ok = save()
+    mode_changed.set()
+    logger.info(f"⚙️ Режим контента изменён: {mode}")
+    return ok
+
+
+def describe_content_mode() -> str:
+    """'memes — мемы из каналов-источников'."""
+    mode = get_content_mode()
+    return f"{mode} — {CONTENT_MODE_LABELS.get(mode, 'неизвестный режим')}"
 
 
 # ===== ИНТЕРВАЛ =====

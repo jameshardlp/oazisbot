@@ -9,7 +9,7 @@ from telegram import Update
 from telegram.ext import ContextTypes, CommandHandler
 
 import settings
-from config import OWNER_ID, CHANNEL_ID, CONTENT_MODE, is_admin
+from config import OWNER_ID, CHANNEL_ID, is_admin
 
 logger = logging.getLogger(__name__)
 
@@ -42,23 +42,17 @@ async def schedule_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         await update.message.reply_text("❌ У вас нет прав.")
         return
 
-    if CONTENT_MODE == "streamers":
-        mode_line = "streamers — посты про стримеров (текст + ссылка на клип)"
-    else:
-        mode_line = "memes — мемы из каналов-источников"
-
     channels = settings.get_meme_channels()
     channels_line = ", ".join(channels) if channels else "список пуст"
 
     await update.message.reply_text(
         "📅 Настройки публикации\n\n"
-        f"Режим: {mode_line}\n"
+        f"Режим: {settings.describe_content_mode()}\n"
         f"Канал: {CHANNEL_ID or 'не задан'}\n"
         f"Интервал: {settings.describe_interval()}\n"
         f"Каналы-источники ({len(channels)}): {channels_line}\n\n"
-        "Изменить: /interval — интервал, /sources — каналы, "
-        "/postnow — выложить мем сейчас.\n"
-        "Режим задаётся переменной окружения CONTENT_MODE и требует перезапуска."
+        "Изменить: /mode — режим, /interval — интервал, /sources — каналы, "
+        "/postnow — выложить мем сейчас."
     )
 
 
