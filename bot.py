@@ -1,10 +1,7 @@
 """Точка входа бота: вебхук-сервер + long polling."""
 import asyncio
 import logging
-import os
 import sys
-
-from aiohttp import web
 
 # Импорты из установленной библиотеки python-telegram-bot
 from telegram.ext import CallbackQueryHandler
@@ -14,12 +11,11 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 
-from config import FREEKASSA_SHOP_ID, FREEKASSA_SECRET1, CONTENT_MODE
+from config import CONTENT_MODE
 import settings
 from bot_modules.client import application
 from bot_modules.scheduler import scheduler
 from bot_modules.meme_scheduler import meme_scheduler
-from payments.webhooks import freekassa_webhook, aurapay_webhook
 
 # Импортируем обработчик для /broadcast
 from bot_modules.handlers.broadcast import get_broadcast_conversation_handler, broadcast_callback
@@ -40,19 +36,6 @@ from bot_modules.handlers.photo import register_photo_handler
 from bot_modules.handlers.content_admin import register_content_admin_handlers
 
 logger = logging.getLogger(__name__)
-
-
-async def start_webhook_server(app: web.Application) -> None:
-    """Поднимает сервер для приёма вебхуков FreeKassa и AuraPay."""
-    port = int(os.getenv("PORT", 8080))
-    app.router.add_post("/freekassa/webhook", freekassa_webhook)
-    app.router.add_post("/aurapay/webhook", aurapay_webhook)
-
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, "0.0.0.0", port)
-    await site.start()
-    logger.info(f"🌐 Webhook сервер на порту {port}")
 
 
 async def shutdown_tasks() -> None:
@@ -81,12 +64,8 @@ async def main() -> None:
     logger.info("⏱️ Команда /interval — интервал между автопостами")
     logger.info("🚀 Команда /postnow — выложить мем из каналов прямо сейчас")
     logger.info("📦 Команда /sources — список каналов, откуда берутся мемы")
+    logger.info("🌐 Вебхук сервер FreeKassa запускается отдельно (webhook_server.py)")
     logger.info("=" * 60)
-
-    # Запускаем webhook сервер
-    web_app = web.Application()
-    if FREEKASSA_SHOP_ID and FREEKASSA_SECRET1:
-        await start_webhook_server(web_app)
 
     # Удаляем вебхук перед запуском (чтобы избежать конфликтов)
     try:
@@ -98,7 +77,7 @@ async def main() -> None:
     # Регистрируем ВСЕ обработчики команд
     register_admin_handlers(application)
     register_basic_handlers(application)
-    register_photo_handler(application)  # <-- ВОССТАНОВЛЕНО
+    register_photo_handler(application)
     register_content_admin_handlers(application)
 
     # Добавляем обработчик для /broadcast (реклама)
