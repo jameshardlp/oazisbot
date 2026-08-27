@@ -12,7 +12,7 @@ from telegram.ext import ContextTypes, CommandHandler
 
 import settings
 from config import CHANNEL_ID, is_admin
-from content import meme_forwarder
+from content import meme_forwarder, posted_store
 from bot_modules.meme_scheduler import send_meme_to_channel
 
 logger = logging.getLogger(__name__)
@@ -65,8 +65,11 @@ async def mode_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     args = context.args or []
 
     if not args:
+        # Заодно показываем, откуда взят режим: если файл настроек пропал, это
+        # первый признак того, что /mode откатился при перезапуске
         await update.message.reply_text(
-            f"🔀 Текущий режим: {settings.describe_content_mode()}\n\n{MODE_USAGE}"
+            f"🔀 Текущий режим: {settings.describe_content_mode()}\n"
+            f"💾 Настройки: {settings.describe_storage()}\n\n{MODE_USAGE}"
         )
         return
 
@@ -116,6 +119,15 @@ async def mode_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         lines.append(
             "⚠️ Не удалось записать настройки в файл — после перезапуска "
             "вернётся прежний режим."
+        )
+    elif mode == "memes":
+        # Режим лежит в файле рядом с ботом. На хостингах с эфемерным диском он
+        # исчезает при перезапуске, и бот возвращается к CONTENT_MODE —
+        # выглядит как «сам переключился обратно на стримеров».
+        lines.append(
+            "ℹ️ Режим записан в файл. Если после перезапуска бот снова начнёт "
+            "постить стримеров — задай CONTENT_MODE=memes в переменных "
+            "окружения хостинга: файл настроек там не сохраняется."
         )
 
     await update.message.reply_text("\n".join(lines))
@@ -185,14 +197,11 @@ async def _post_now_job(chat_id: int, bot) -> None:
     """Публикует мем и присылает результат владельцу отдельным сообщением."""
     global _posting_now
     try:
-        ok = await send_meme_to_channel()
+        ok, reason = await send_meme_to_channel()
         if ok:
             text = "✅ Мем опубликован в канале."
         else:
-            text = (
-                "❌ Опубликовать не удалось. Причина в логах — обычно это пустой "
-                "список каналов, недоступный t.me или пост без медиа."
-            )
+            text = f"❌ Опубликовать не удалось: {reason}"
     except Exception as e:
         logger.error(f"❌ Ошибка внеплановой публикации: {e}")
         text = f"❌ Ошибка при публикации: {e}"

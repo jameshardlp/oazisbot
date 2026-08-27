@@ -1,22 +1,48 @@
-"""Планировщик для публикации мемов (скачивание и отправка с FFmpeg)."""
+"""Планировщик публикации мемов: скачивание и отправка в канал.
+
+Ссылки на медиа даёт content/meme_forwarder — он разбирает ту же страницу
+t.me/s/<канал>, по которой ищет посты. Раньше поиском ссылок занимался этот
+модуль (get_direct_media_url, четыре регулярки по странице одиночного поста), но
+на t.me/<канал>/<id> нет ни mp4, ни всех фото альбома — только og:image-превью.
+Поэтому видео не публиковались вовсе, а из альбома уходило одно фото.
+
+Из поста-альбома публикуется РОВНО ОДИН элемент, а не media_group. Причина не в
+предпочтениях: send_media_group с готовыми InputFile формировал битый запрос —
+python-telegram-bot возвращает уже созданный InputFile из parse_file_input как
+есть, attach://-имени у него нет, и в multipart вместо JSON-описания альбома
+уходило поле media с байтами одного файла. Telegram такие посты отклонял, то
+есть любой пост с двумя и более медиа не публиковался никогда.
+
+FFmpeg теперь резерв, а не обязательный этап: t.me отдаёт видео уже в формате
+Telegram (H.264/AAC, faststart), и перекодирование каждого файла было минутами
+работы и лишней точкой отказа. Перекодируем только то, что Telegram не принял
+или что не пролезает по размеру.
+
+Один и тот же мем в канал не уходит дважды: что уже публиковалось, помнит
+content/posted_store — по посту, по файлу и по sha256 самих байтов. Последнее
+ловит и перезалив того же видео в другом канале-источнике, где и ссылка, и id
+поста другие.
+"""
 import asyncio
-import logging
-import random
 import io
-import time
-import re
+import logging
 import os
+import random
 import shutil
 import subprocess
 import tempfile
-from typing import Optional
+import time
+from typing import Dict, List, Optional, Tuple
 
+import requests
 from telegram import InputFile
+from telegram.error import RetryAfter, TelegramError, TimedOut
+
 import settings
 from config import CHANNEL_ID
-from content import net
-from content.meme_forwarder import get_random_meme_to_forward
-from bot_modules.client import bot  # <-- ИСПРАВЛЕНО!
+from content import net, posted_store
+from content.meme_forwarder import fetch_post_media, get_meme_candidates
+from bot_modules.client import bot
 
 logger = logging.getLogger(__name__)
 
@@ -24,18 +50,40 @@ logger = logging.getLogger(__name__)
 # читать поток бесконечно, а задача планировщика при этом не завершается
 FFMPEG_TIMEOUT = 300
 
-# Стратегия 4 переходит по вложенной ссылке t.me — без ограничения глубины
-# страница, ссылающаяся на себя, зациклила бы разбор
-MAX_MEDIA_URL_DEPTH = 2
+# Сколько постов пробуем за одну публикацию. У отдельного поста медиа может не
+# скачаться (t.me не ответил, токен в ссылке просрочен), и раньше такая осечка
+# означала полный провал: /postnow «работал через раз», а планировщик замолкал
+# до следующего интервала.
+MAX_CANDIDATES = 5
+
+# Сколько элементов одного поста пробуем скачать, прежде чем признать пост
+# неудачным. В альбоме это бесплатный резерв: не скачалось первое фото — берём
+# следующее, пост всё равно уйдёт.
+MAX_MEDIA_TRIES = 3
+
+# Bot API не принимает файлы больше 50 МБ
+TELEGRAM_UPLOAD_LIMIT = 50 * 1024 * 1024
+
+# Пауза после неудачной публикации. Раньше цикл ждал полный интервал (до трёх
+# часов) — со стороны это выглядело как «мемы не постятся вообще».
+RETRY_AFTER_FAILURE = 5 * 60
+
+# Таймауты на отправку медиа. Дефолтные 20 с на чтение ответа видео не хватает:
+# Telegram после аплоада обрабатывает файл у себя, и отказ по таймауту выглядел
+# как «Telegram не принимает видео».
+SEND_READ_TIMEOUT = 180
+SEND_WRITE_TIMEOUT = 300
 
 
-def download_media(url: str) -> Optional[io.BytesIO]:
+def download_media(
+    url: str, session: Optional[requests.Session] = None
+) -> Optional[io.BytesIO]:
     """Скачивает медиа по ссылке в память."""
     if not url or not url.startswith('http'):
         logger.warning(f"⚠️ Невалидный URL: {url}")
         return None
 
-    response = net.get(url, timeout=30, label="скачивание медиа")
+    response = net.get(url, timeout=30, label="скачивание медиа", session=session)
     if response is None:
         return None
 
@@ -90,6 +138,9 @@ def convert_video_with_ffmpeg(input_data: bytes, output_format: str = "mp4") -> 
         # Команда FFmpeg: конвертирует в H.264 для Telegram.
         # -y обязателен: без него ffmpeg при уже существующем выходном файле
         # ждёт подтверждения со stdin и висит до таймаута.
+        # min(1280,iw): только уменьшаем. Жёсткое scale=1280 растягивало
+        # вертикальные мемы вверх по разрешению, и «сжатие» давало файл в
+        # несколько раз тяжелее исходного.
         cmd = [
             "ffmpeg",
             "-y",
@@ -99,7 +150,7 @@ def convert_video_with_ffmpeg(input_data: bytes, output_format: str = "mp4") -> 
             "-movflags", "+faststart",
             "-preset", preset,
             "-crf", crf_value,
-            "-vf", "scale=1280:-2",
+            "-vf", "scale=w='min(1280,iw)':h=-2",
             temp_output
         ]
 
@@ -133,7 +184,7 @@ def convert_video_with_ffmpeg(input_data: bytes, output_format: str = "mp4") -> 
         logger.error(f"FFmpeg не уложился в {FFMPEG_TIMEOUT}с, конвертация прервана")
         return None
     except FileNotFoundError:
-        logger.error("FFmpeg не найден в PATH — видео отправится без конвертации")
+        logger.error("FFmpeg не найден в PATH — перекодировать видео нечем")
         return None
     except Exception as e:
         logger.error(f"Ошибка FFmpeg: {e}")
@@ -142,179 +193,280 @@ def convert_video_with_ffmpeg(input_data: bytes, output_format: str = "mp4") -> 
         shutil.rmtree(workdir, ignore_errors=True)
 
 
-def get_direct_media_url(post_url: str, _depth: int = 0) -> Optional[str]:
-    """Пытается получить прямую ссылку на медиа из поста.
+def pick_candidates(items: List[Dict[str, str]]) -> List[Dict[str, str]]:
+    """Медиа поста в порядке предпочтения: сначала видео, затем фото.
 
-    Стратегии перебираются по порядку, и в лог пишется, какая сработала:
-    иначе сломанная вёрстка t.me выглядит как «в посте просто нет медиа».
+    Публикуется только первый скачавшийся элемент. Видео вперёд, потому что в
+    смешанном альбоме оно и есть содержание поста, а фото рядом — кадр или
+    подпись.
+
+    Файлы, которые уже уходили в канал, отбрасываются здесь же: проверка по
+    ссылке бесплатная, а для видео путь в url телеско.pe — это сам файл, так что
+    повтор виден до скачивания.
     """
-    try:
-        response = net.get(post_url, label="страница поста t.me")
-        if response is None:
-            return None
+    fresh = [item for item in items if not posted_store.is_file_posted(item.get('url', ''))]
+    if len(fresh) != len(items):
+        logger.info(f"🧠 Пропускаю {len(items) - len(fresh)} медиа: такие файлы уже публиковались")
 
-        if response.status_code != 200:
-            logger.warning(f"⚠️ Не удалось загрузить страницу поста: {response.status_code}")
-            return None
+    videos = [item for item in fresh if item.get('type') == 'video']
+    photos = [item for item in fresh if item.get('type') != 'video']
+    return videos + photos
 
-        html = response.text
 
-        # 1. Ищем прямые ссылки на файлы через теги <img> и <video>
-        img_pattern = r'<img[^>]+src="(https?://[^"]+\.(?:jpg|jpeg|png|gif|webp))"'
-        img_matches = re.findall(img_pattern, html, re.IGNORECASE)
-        if img_matches:
-            logger.info("🔎 Медиа найдено стратегией 1 (<img src>)")
-            return img_matches[-1]
+def download_first(items: List[Dict[str, str]]) -> Optional[Dict]:
+    """Скачивает первый годный элемент поста: {'type', 'url', 'data'} или None.
 
-        video_pattern = r'<video[^>]+src="(https?://[^"]+\.(?:mp4|webm|mov))"'
-        video_matches = re.findall(video_pattern, html, re.IGNORECASE)
-        if video_matches:
-            logger.info("🔎 Медиа найдено стратегией 1 (<video src>)")
-            return video_matches[0]
+    Размер здесь не проверяем: слишком тяжёлое видео умеет спасти ffmpeg,
+    решение принимает _publish.
 
-        # 2. Ищем ссылки на файлы через data-bem
-        bem_pattern = r'data-bem="({[^"]+})"'
-        bem_matches = re.findall(bem_pattern, html)
-        for bem_json in bem_matches:
-            try:
-                import json
-                data = json.loads(bem_json)
-                if 'photo' in data and 'src' in data['photo']:
-                    src = data['photo']['src']
-                    if src.startswith('//'):
-                        src = 'https:' + src
-                    elif src.startswith('/'):
-                        src = 'https://t.me' + src
-                    if '/preview/' in src:
-                        src = src.replace('/preview/', '/file/')
-                    logger.info("🔎 Медиа найдено стратегией 2 (data-bem)")
-                    return src
-            except Exception:
-                pass
+    Байты сверяем с историей публикаций: тот же файл мог быть перезалит в другой
+    канал или другой пост, и тогда ни id поста, ни ссылка о повторе не скажут.
 
-        # 3. Ищем любые ссылки с расширениями файлов
-        file_pattern = r'https?://[^\s"\']+\.(?:jpg|jpeg|png|gif|mp4|webm|webp)'
-        file_matches = re.findall(file_pattern, html, re.IGNORECASE)
-        if file_matches:
-            logger.info("🔎 Медиа найдено стратегией 3 (ссылка с расширением файла)")
-            return file_matches[0]
+    Своя сессия на вызов: функция работает в потоке из asyncio.to_thread, а
+    requests.Session между потоками делить нельзя — планировщик и /postnow
+    вполне могут качать одновременно.
+    """
+    session = net.new_session()
 
-        # 4. Ищем ссылки через Telegram file
-        if _depth < MAX_MEDIA_URL_DEPTH:
-            tg_file_pattern = r'https?://t\.me/[^/]+/\d+'
-            tg_file_matches = re.findall(tg_file_pattern, html)
-            for tg_url in tg_file_matches:
-                if tg_url.rstrip('/') == post_url.rstrip('/'):
-                    continue  # ссылка на себя же — переход ничего не даст
-                logger.info(f"🔎 Стратегия 4: перехожу по вложенной ссылке {tg_url}")
-                return get_direct_media_url(tg_url, _depth + 1)
-        else:
-            logger.warning(
-                f"⚠️ Достигнут предел вложенности ссылок ({MAX_MEDIA_URL_DEPTH}), "
-                f"дальше не идём: {post_url}"
-            )
+    for item in items[:MAX_MEDIA_TRIES]:
+        data = download_media(item['url'], session=session)
+        if data is None:
+            continue
 
-        net.log_layout_changed(
-            "страница поста t.me", post_url,
-            "ни одна из 4 стратегий не нашла ссылку на медиа",
+        if posted_store.is_content_posted(data.getvalue()):
+            logger.info("🧠 Этот файл уже публиковался (совпали байты) — беру следующий")
+            continue
+
+        return {'type': item['type'], 'url': item['url'], 'data': data}
+
+    return None
+
+
+async def _send(media_type: str, data: io.BytesIO) -> None:
+    """Отправляет один файл в канал. Ошибки Telegram намеренно наружу: их
+    разбирает _publish, чтобы решить, стоит ли перекодировать видео и повторить.
+    """
+    stamp = int(time.time())
+
+    # BytesIO читается до конца при создании InputFile, поэтому перед каждой
+    # попыткой отправки курсор возвращаем в начало
+    data.seek(0)
+
+    if media_type == 'video':
+        await bot.send_video(
+            chat_id=CHANNEL_ID,
+            video=InputFile(data, filename=f"meme_{stamp}.mp4"),
+            supports_streaming=True,
+            read_timeout=SEND_READ_TIMEOUT,
+            write_timeout=SEND_WRITE_TIMEOUT,
         )
-        return None
+    else:
+        await bot.send_photo(
+            chat_id=CHANNEL_ID,
+            photo=InputFile(data, filename=f"meme_{stamp}.jpg"),
+            read_timeout=SEND_READ_TIMEOUT,
+            write_timeout=SEND_WRITE_TIMEOUT,
+        )
 
-    except Exception as e:
-        logger.error(f"Ошибка получения прямой ссылки: {e}")
-        return None
+
+def _mb(data: io.BytesIO) -> int:
+    return len(data.getvalue()) // 1024 // 1024
 
 
-async def send_meme_to_channel() -> bool:
-    """Скачивает и отправляет мем в канал.
+async def _shrink_video(data: io.BytesIO) -> Tuple[Optional[io.BytesIO], str]:
+    """Перекодирует видео через ffmpeg. (None, причина) — не получилось."""
+    result = await asyncio.to_thread(convert_video_with_ffmpeg, data.getvalue())
+    if result is None:
+        return None, "перекодировать видео не удалось (нужен ffmpeg в PATH, см. лог)"
+
+    if len(result.getvalue()) > TELEGRAM_UPLOAD_LIMIT:
+        return None, (
+            f"после перекодирования видео всё ещё {_mb(result)}МБ, "
+            f"предел Telegram — {TELEGRAM_UPLOAD_LIMIT // 1024 // 1024}МБ"
+        )
+
+    return result, ""
+
+
+async def _publish(media_type: str, data: io.BytesIO) -> Tuple[bool, str]:
+    """Отправляет один файл. (True, '') — ушёл, иначе (False, причина).
+
+    Причина возвращается наружу, а не только в лог: /postnow отвечает ею
+    админу, иначе о провале известно лишь «смотри логи».
+    """
+    limit_mb = TELEGRAM_UPLOAD_LIMIT // 1024 // 1024
+    converted_once = False
+
+    if len(data.getvalue()) > TELEGRAM_UPLOAD_LIMIT:
+        if media_type != 'video':
+            return False, f"фото весит {_mb(data)}МБ, Bot API принимает не больше {limit_mb}МБ"
+
+        # Раньше такой файл просто пропускался, и пост с тяжёлым видео не
+        # публиковался никогда. Сжатие — единственный способ его отправить.
+        logger.info(f"🔄 Видео {_mb(data)}МБ больше {limit_mb}МБ, сжимаю через FFmpeg")
+        data, reason = await _shrink_video(data)
+        if data is None:
+            return False, f"видео больше {limit_mb}МБ: {reason}"
+        converted_once = True
+
+    try:
+        await _send(media_type, data)
+        return True, ""
+    except (TimedOut, RetryAfter) as e:
+        # Повтор не делаем: Telegram мог принять файл и не успеть ответить, а
+        # вторая отправка продублировала бы пост в канале.
+        return False, f"Telegram не ответил вовремя ({e}) — повтор пропущен, чтобы не задублировать пост"
+    except TelegramError as e:
+        if media_type != 'video':
+            return False, f"Telegram отклонил фото: {e}"
+        if converted_once:
+            # Второй проход ffmpeg по уже перекодированному файлу — это минуты
+            # работы с тем же результатом
+            return False, f"Telegram отклонил перекодированное видео: {e}"
+        logger.warning(f"⚠️ Telegram не принял видео ({e}), перекодирую через FFmpeg")
+
+    converted, reason = await _shrink_video(data)
+    if converted is None:
+        return False, f"Telegram отклонил видео, {reason}"
+
+    try:
+        await _send(media_type, converted)
+        return True, ""
+    except (TimedOut, RetryAfter) as e:
+        return False, f"Telegram не ответил вовремя на перекодированное видео ({e})"
+    except TelegramError as e:
+        return False, f"Telegram не принял и перекодированное видео: {e}"
+
+
+async def _publish_meme(meme: Dict) -> Tuple[bool, str]:
+    """Скачивает медиа одного поста и публикует. (True, '') — пост ушёл в канал."""
+    source_channel = meme.get('source_channel')
+    message_id = meme.get('message_id')
+    source_name = meme.get('source_name')
+
+    if not source_channel or not message_id:
+        return False, "у выбранного поста нет канала или id — парсер вернул мусор"
+
+    logger.info(f"📥 Обрабатываю мем из {source_name} (ID: {message_id})")
+
+    # Ссылки берём заново: в кэше постов они могли пролежать до часа, а token в
+    # url telesco.pe живёт меньше. Кэш — резерв, если страница не открылась.
+    items = await asyncio.to_thread(fetch_post_media, source_channel, message_id)
+    if not items:
+        items = meme.get('media') or []
+        if items:
+            logger.warning("⚠️ Свежие ссылки получить не удалось, беру из кэша")
+
+    if not items:
+        logger.warning(f"⚠️ В посте {message_id} нет медиа, которое можно скачать")
+        return False, f"в посте {source_name}/{message_id} нет медиа со ссылкой на файл"
+
+    candidates = pick_candidates(items)
+    if not candidates:
+        return False, f"все медиа поста {source_name}/{message_id} уже публиковались"
+
+    if len(candidates) > 1:
+        logger.info(
+            f"🖼️ В посте {len(items)} медиа — публикую одно "
+            f"({candidates[0]['type']}), остальные в резерве"
+        )
+
+    got = await asyncio.to_thread(download_first, candidates)
+    if got is None:
+        logger.warning(f"⚠️ Медиа поста {message_id} скачать не удалось")
+        return False, (
+            f"медиа поста {source_name}/{message_id} не подошло "
+            "(не скачалось или уже публиковалось)"
+        )
+
+    media_type, data = got['type'], got['data']
+    logger.info(f"📤 Отправляю {media_type} ({len(data.getvalue()) // 1024}KB)")
+
+    ok, reason = await _publish(media_type, data)
+    if not ok:
+        return False, reason
+
+    # Запоминаем только теперь: пост, помеченный до отправки, пропал бы навсегда
+    # при любой осечке, ни разу не появившись в канале
+    if not await asyncio.to_thread(
+        posted_store.remember, source_channel, message_id, got['url'], got['data'].getvalue()
+    ):
+        logger.warning(
+            f"⚠️ Мем опубликован, но записать его в {posted_store.store_path()} "
+            "не удалось — после перезапуска он может уйти повторно"
+        )
+
+    logger.info(f"✅ Мем из {source_name} опубликован!")
+    return True, ""
+
+
+async def send_meme_to_channel() -> Tuple[bool, str]:
+    """Публикует один мем в канал. (True, '') — пост ушёл, иначе (False, причина).
+
+    Перебирает до MAX_CANDIDATES постов: осечка на одном посте не должна
+    означать провал всей публикации. Кандидаты берём одним списком — так каждая
+    попытка достаётся новому посту (пост помечается опубликованным только после
+    успешной отправки, поэтому повторный случайный выбор мог бы вернуть тот же).
 
     Парсинг, скачивание и транскодирование — синхронные и тяжёлые, поэтому
     уходят в отдельный поток: иначе конвертация видео на минуты замораживала
     весь event loop и бот перестал бы отвечать на команды.
     """
+    if not CHANNEL_ID:
+        logger.warning("⚠️ CHANNEL_ID не задан — публиковать некуда")
+        return False, "CHANNEL_ID не задан в переменных окружения"
+
     try:
-        meme_data = await asyncio.to_thread(get_random_meme_to_forward)
-        if not meme_data:
-            logger.warning("⚠️ Нет доступных мемов")
-            return False
-
-        source_channel = meme_data.get('source_channel')
-        message_id = meme_data.get('message_id')
-        source_name = meme_data.get('source_name')
-
-        if not source_channel or not message_id:
-            return False
-
-        logger.info(f"📥 Обрабатываю мем из {source_name} (ID: {message_id})")
-
-        post_url = f"https://t.me/{source_channel.replace('@', '')}/{message_id}"
-        logger.info(f"🔗 Загружаю страницу поста: {post_url}")
-
-        direct_url = await asyncio.to_thread(get_direct_media_url, post_url)
-        if not direct_url:
-            logger.warning(f"⚠️ Не найдена прямая ссылка на медиа в посте {message_id}")
-            return False
-
-        logger.info(f"📥 Скачиваю медиа: {direct_url[:80]}...")
-
-        media_data = await asyncio.to_thread(download_media, direct_url)
-        if not media_data:
-            logger.warning(f"⚠️ Не удалось скачать медиа")
-            return False
-
-        # Определяем тип по расширению
-        url_lower = direct_url.lower()
-        if any(ext in url_lower for ext in ['.jpg', '.jpeg', '.png', '.webp']):
-            media_type = 'photo'
-        elif any(ext in url_lower for ext in ['.mp4', '.mov', '.avi']):
-            media_type = 'video'
-        elif any(ext in url_lower for ext in ['.gif', '.webm']):
-            media_type = 'animation'
-        else:
-            media_type = 'document'
-
-        # Если это видео — конвертируем через FFmpeg
-        if media_type == 'video':
-            logger.info("🔄 Обнаружено видео, конвертирую через FFmpeg...")
-            converted_data = await asyncio.to_thread(
-                convert_video_with_ffmpeg, media_data.getvalue()
-            )
-            if converted_data:
-                media_data = converted_data
-                logger.info("✅ Видео успешно сконвертировано")
-            else:
-                logger.warning("⚠️ Не удалось сконвертировать видео, отправляю как есть")
-
-        logger.info(f"📤 Отправляю {media_type} ({len(media_data.getvalue()) // 1024}KB)")
-
-        # Отправляем с использованием InputFile
-        if media_type == 'photo':
-            await bot.send_photo(
-                chat_id=CHANNEL_ID,
-                photo=InputFile(media_data, filename=f"meme_{int(time.time())}.jpg")
-            )
-        elif media_type == 'video':
-            await bot.send_video(
-                chat_id=CHANNEL_ID,
-                video=InputFile(media_data, filename=f"meme_{int(time.time())}.mp4")
-            )
-        elif media_type == 'animation':
-            await bot.send_animation(
-                chat_id=CHANNEL_ID,
-                animation=InputFile(media_data, filename=f"meme_{int(time.time())}.gif")
-            )
-        else:
-            await bot.send_document(
-                chat_id=CHANNEL_ID,
-                document=InputFile(media_data, filename=f"meme_{int(time.time())}.bin")
-            )
-
-        logger.info(f"✅ Мем из {source_name} опубликован!")
-        return True
-
+        candidates = await asyncio.to_thread(get_meme_candidates, MAX_CANDIDATES)
     except Exception as e:
-        logger.error(f"❌ Ошибка: {e}")
+        logger.exception("❌ Не удалось выбрать пост с мемом")
+        return False, f"не удалось прочитать каналы-источники: {e}"
+
+    if not candidates:
+        if not settings.get_meme_channels():
+            return False, "список каналов-источников пуст — добавь канал: /sources add <канал>"
+        logger.warning("⚠️ Новых мемов не осталось")
+        return False, (
+            "все посты из каналов-источников уже публиковались. Добавь новые "
+            "каналы (/sources add) или разреши повторы (/posted reset)"
+        )
+
+    last_reason = ""
+
+    for attempt, meme in enumerate(candidates, 1):
+        try:
+            ok, last_reason = await _publish_meme(meme)
+            if ok:
+                return True, ""
+        except Exception as e:
+            logger.exception(f"❌ Ошибка публикации (кандидат {attempt}/{len(candidates)})")
+            last_reason = f"{type(e).__name__}: {e}"
+
+        logger.warning(
+            f"⚠️ Кандидат {attempt}/{len(candidates)} не подошёл ({last_reason}), "
+            "беру следующий"
+        )
+
+    logger.error(f"❌ Ни один из {len(candidates)} постов опубликовать не удалось")
+    return False, (
+        f"ни один из {len(candidates)} постов не подошёл. Последняя причина: {last_reason}"
+    )
+
+
+async def _post_once() -> bool:
+    """Публикация с проверкой режима.
+
+    Планировщик гасит content_supervisor, но между сменой режима и отменой
+    задачи есть зазор — попасть в него мем не должен.
+    """
+    if settings.get_content_mode() != "memes":
+        logger.info("ℹ️ Режим уже не memes — публикацию мема пропускаю")
         return False
+
+    ok, reason = await send_meme_to_channel()
+    if not ok and reason:
+        logger.warning(f"⚠️ Мем не опубликован: {reason}")
+    return ok
 
 
 async def meme_scheduler():
@@ -325,28 +477,33 @@ async def meme_scheduler():
     logger.info(f"📡 Канал: {CHANNEL_ID}")
     logger.info(f"⏱️ Интервал: {settings.describe_interval()} (меняется командой /interval)")
     logger.info(f"📦 Источники: {', '.join(channels) if channels else 'не заданы — /sources add'}")
-    logger.info("🔄 Режим: скачивание и отправка с FFmpeg и InputFile")
+    logger.info("🔄 Видео уходит как есть, FFmpeg — резерв при отказе Telegram")
+    logger.info(f"🧠 Повторы: {posted_store.describe()}")
     logger.info("=" * 60)
 
-    first_delay = random.randint(30, 60)
-    logger.info(f"⏳ Первый мем через {first_delay} секунд...")
-    await asyncio.sleep(first_delay)
-    await send_meme_to_channel()
-
-    count = 1
+    count = 0
+    interval = random.randint(30, 60)
+    logger.info(f"⏳ Первый мем через {interval} секунд...")
 
     while True:
-        interval = settings.next_interval_seconds()
-        logger.info(f"⏳ Следующий мем через {settings.format_interval(interval)}")
-
         # Не asyncio.sleep: /interval должен подействовать сразу, а не через часы
         if await settings.wait_for_next_post(interval):
-            logger.info("♻️ Интервал изменён, отсчёт пошёл заново")
+            interval = settings.next_interval_seconds()
+            logger.info(
+                f"♻️ Интервал изменён, отсчёт пошёл заново: следующий мем через "
+                f"{settings.format_interval(interval)}"
+            )
             continue
 
-        success = await send_meme_to_channel()
-        if success:
+        if await _post_once():
             count += 1
-            logger.info(f"📊 Всего опубликовано мемов: {count}")
+            interval = settings.next_interval_seconds()
+            logger.info(
+                f"📊 Всего опубликовано мемов: {count}. Следующий через "
+                f"{settings.format_interval(interval)}"
+            )
         else:
-            logger.warning("⚠️ Публикация мема не удалась, пробую дальше...")
+            interval = RETRY_AFTER_FAILURE
+            logger.warning(
+                f"⚠️ Публикация не удалась, повтор через {settings.format_interval(interval)}"
+            )

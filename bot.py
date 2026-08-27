@@ -41,6 +41,10 @@ from bot_modules.handlers.content_admin import register_content_admin_handlers
 
 logger = logging.getLogger(__name__)
 
+# Пауза перед подъёмом планировщика, который упал сам: без неё повторяющаяся
+# ошибка на старте цикла крутилась бы в лог без остановки
+RESTART_DELAY = 10
+
 
 async def start_webhook_server(app: web.Application) -> None:
     """Поднимает сервер для приёма вебхуков FreeKassa и AuraPay на отдельном порту."""
@@ -70,6 +74,10 @@ async def content_supervisor() -> None:
     Планировщик — бесконечный цикл, сам он режим не перечитывает. Поэтому смену
     режима командой /mode обслуживает эта задача: гасит текущий цикл и поднимает
     другой. Без неё /mode подействовала бы только после перезапуска процесса.
+
+    Заодно следит, что планировщик жив: упавшая задача раньше умирала молча
+    (её traceback не попадал никуда, а надзор сидел в ожидании смены режима), и
+    автопостинг просто прекращался до перезапуска бота.
     """
     task = None
     current_mode = None
@@ -78,7 +86,7 @@ async def content_supervisor() -> None:
         while True:
             mode = settings.get_content_mode()
 
-            if mode != current_mode:
+            if task is None or mode != current_mode:
                 if task is not None:
                     task.cancel()
                     # Ждём фактического завершения: иначе старый планировщик
@@ -96,7 +104,38 @@ async def content_supervisor() -> None:
             settings.mode_changed.clear()
             if settings.get_content_mode() != current_mode:
                 continue
-            await settings.mode_changed.wait()
+
+            # Ждём того, что случится раньше: смены режима или падения
+            # планировщика
+            waiter = asyncio.create_task(settings.mode_changed.wait())
+            try:
+                done, _ = await asyncio.wait(
+                    {waiter, task}, return_when=asyncio.FIRST_COMPLETED
+                )
+            finally:
+                waiter.cancel()
+
+            if task in done:
+                # Планировщик — бесконечный цикл, сам он завершиться не должен
+                if task.cancelled():
+                    # Отменили не мы — значит процесс уже останавливается
+                    logger.info(f"🛑 Планировщик режима {current_mode} отменён извне")
+                    raise asyncio.CancelledError
+
+                exc = task.exception()
+                if exc is not None:
+                    logger.error(
+                        f"❌ Планировщик режима {current_mode} упал: {exc!r}",
+                        exc_info=exc,
+                    )
+                else:
+                    logger.error(f"❌ Планировщик режима {current_mode} завершился сам")
+
+                task = None
+                logger.info(f"♻️ Перезапуск планировщика через {RESTART_DELAY} с")
+                await asyncio.sleep(RESTART_DELAY)
+                continue
+
             logger.info("♻️ Режим контента изменён, меняю планировщик")
 
     except asyncio.CancelledError:
@@ -119,6 +158,17 @@ async def main() -> None:
             f"📦 Источники мемов: {', '.join(channels) if channels else 'не заданы — /sources add'}"
         )
     logger.info(f"⏱️ Интервал между постами: {settings.describe_interval()}")
+    logger.info(f"💾 Настройки: {settings.describe_storage()}")
+    if not settings.loaded_from_file():
+        # Самая частая жалоба «бот снова постит стримеров, хотя включены мемы»:
+        # файл настроек пропал вместе с контейнером, и /mode откатился к
+        # значению из окружения.
+        logger.warning(
+            "⚠️ Файл настроек не найден — режим, интервал и список каналов взяты "
+            "по умолчанию. Если /mode переключали раньше, значит диск хостинга "
+            "эфемерный: задай нужный режим переменной CONTENT_MODE или укажи "
+            "SETTINGS_FILE на постоянном томе."
+        )
     logger.info("📤 Команда /resend — отправка контента в канал от имени бота")
     logger.info("📸 Команда /photo — случайное фото стримера")
     logger.info("🔀 Команда /mode — режим контента: стримеры или мемы")

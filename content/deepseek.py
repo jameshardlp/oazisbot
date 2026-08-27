@@ -8,7 +8,7 @@ import logging
 import random
 import time
 import re
-from typing import Optional, Tuple, List
+from typing import Callable, Optional, Tuple, List
 
 from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL, DEEPSEEK_API_URL
 from content import net
@@ -534,30 +534,41 @@ def has_banned_phrases(text: str) -> Tuple[bool, str]:
     
     return False, ""
 
-def generate_caption_with_validation() -> Tuple[str, Optional[str]]:
+def generate_caption_with_validation(
+    should_stop: Optional[Callable[[], bool]] = None,
+) -> Tuple[str, Optional[str]]:
     """
     Генерирует пост с проверкой.
     Для чтения стиля из канала используется веб-парсер (без API ключей).
+
+    should_stop: проверяется перед каждой попыткой. Функция работает в потоке из
+    asyncio.to_thread, а поток отменой задачи не останавливается — без этой
+    проверки генерация продолжалась минутами после /mode memes и в логах
+    выглядела как продолжающийся постинг стримеров.
     """
     logger.info("Генерирую уникальный пост с проверкой...")
-    
+
     # Получаем стиль из канала maddysontg через веб-парсер
     style_context = get_style_context(limit=5)
-    
+
     # Тема всегда одна — стримеры
     streamer_key, streamer_display = get_streamer_for_post()
     topic = f"стример {streamer_display}"
     logger.info(f"🎯 ТЕМА: СТРИМЕР - {streamer_display}")
-    
+
     if not DEEPSEEK_API_KEY:
         logger.error("❌ Нет ключа DeepSeek API")
         return "", streamer_key
-    
+
     # Получаем примеры постов для проверки плагиата
     sample_posts = fetch_and_cache_posts(limit=5)
-    
+
     max_attempts = 20
     for attempt in range(max_attempts):
+        if should_stop is not None and should_stop():
+            logger.info("🛑 Генерация остановлена: пост про стримера больше не нужен")
+            return "", streamer_key
+
         try:
             logger.info(f"Попытка {attempt+1}/{max_attempts} для {topic}")
             

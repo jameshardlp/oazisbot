@@ -76,6 +76,10 @@ AURAPAY_MINIAPP_URL = os.getenv(
 BROADCAST_PRICE_FILE = os.getenv("BROADCAST_PRICE_FILE", "broadcast_price.json")
 # Настройки, которые владелец меняет командами (/interval, /sources) — см. settings.py
 SETTINGS_FILE = os.getenv("SETTINGS_FILE", "bot_settings.json")
+# Что уже уходило в канал — см. content/posted_store.py. Отдельный файл, а не
+# ключ в SETTINGS_FILE: список растёт до десятков тысяч записей, а настройки
+# правят руками, и разбирать их среди хэшей невозможно.
+POSTED_FILE = os.getenv("POSTED_FILE", "posted_media.json")
 
 # ===== ОТЛАДКА =====
 if __name__ == "__main__":

@@ -11,6 +11,7 @@
 import asyncio
 import json
 import logging
+import os
 import random
 import re
 from typing import Any, Dict, List, Optional, Tuple
@@ -58,6 +59,12 @@ changed = asyncio.Event()
 mode_changed = asyncio.Event()
 
 _settings: Optional[Dict[str, Any]] = None
+
+# Прочитались настройки из файла или подставлены значения по умолчанию. Нужно для
+# диагностики: на хостинге с эфемерным диском bot_settings.json исчезает при
+# перезапуске, режим возвращается к CONTENT_MODE, и со стороны это выглядит как
+# «бот сам переключился со мемов на стримеров».
+_loaded_from_file = False
 
 
 def _defaults() -> Dict[str, Any]:
@@ -129,7 +136,7 @@ def _sanitize(raw: Any) -> Dict[str, Any]:
 
 def load(force: bool = False) -> Dict[str, Any]:
     """Читает настройки из файла (с кэшем). При любой ошибке — значения по умолчанию."""
-    global _settings
+    global _settings, _loaded_from_file
     if _settings is not None and not force:
         return _settings
 
@@ -139,20 +146,48 @@ def load(force: bool = False) -> Dict[str, Any]:
     except FileNotFoundError:
         # Обычная ситуация при первом запуске — не шумим
         _settings = _defaults()
+        _loaded_from_file = False
         return _settings
     except (OSError, ValueError) as e:
         logger.warning(f"⚠️ Не удалось прочитать {SETTINGS_FILE}: {e}")
         _settings = _defaults()
+        _loaded_from_file = False
         return _settings
 
     _settings = _sanitize(raw)
+    _loaded_from_file = True
     return _settings
 
 
+def settings_path() -> str:
+    return os.path.abspath(SETTINGS_FILE)
+
+
+def loaded_from_file() -> bool:
+    """False — настройки взяты по умолчанию, файла на диске не было."""
+    load()
+    return _loaded_from_file
+
+
+def describe_storage() -> str:
+    """Где лежат настройки и переживут ли они перезапуск — для логов и /mode."""
+    load()
+    if _loaded_from_file:
+        return f"прочитаны из {settings_path()}"
+    return (
+        f"файла {settings_path()} нет, взяты значения по умолчанию "
+        f"(режим — CONTENT_MODE={DEFAULT_CONTENT_MODE})"
+    )
+
+
 def save() -> bool:
+    global _loaded_from_file
     try:
         with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
             json.dump(load(), f, ensure_ascii=False, indent=2)
+        # Файл теперь есть: describe_storage не должен уверять, что настройки
+        # взяты по умолчанию
+        _loaded_from_file = True
         return True
     except OSError as e:
         logger.error(f"❌ Не удалось сохранить {SETTINGS_FILE}: {e}")
